@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestStudentOtp, verifyStudentOtp } from "@/lib/auth-actions";
 
-const OTP_LENGTH = 8;
+const OTP_LENGTH = 6;
 
 const initialRequestState = { success: false as boolean, message: "", email: "" };
 const initialVerifyState = { success: false as boolean, message: "" };
@@ -34,7 +34,7 @@ export function StudentLoginForm() {
   }, [requestState]);
 
   function handleOtpChange(index: number, rawValue: string) {
-    const cleaned = rawValue.replace(/[^A-Za-z0-9]/g, "");
+    const cleaned = rawValue.replace(/[^0-9]/g, "");
     const char = cleaned.slice(-1);
     setOtpDigits((prev) => {
       const next = [...prev];
@@ -73,7 +73,7 @@ export function StudentLoginForm() {
   }
 
   function handleOtpPaste(event: React.ClipboardEvent<HTMLInputElement>) {
-    const pasted = event.clipboardData.getData("text").replace(/[^A-Za-z0-9]/g, "").slice(0, OTP_LENGTH);
+    const pasted = event.clipboardData.getData("text").replace(/[^0-9]/g, "").slice(0, OTP_LENGTH);
     if (!pasted) {
       return;
     }
@@ -143,7 +143,7 @@ export function StudentLoginForm() {
           </Button>
 
           <div className="space-y-1 pt-1 text-xs text-slate-500">
-            <p>인증번호 받기를 누르면 가천대학교 이메일로 8자리 인증번호가 전송됩니다.</p>
+            <p>인증번호 받기를 누르면 가천대학교 이메일로 6자리 인증번호가 전송됩니다.</p>
             <p>메일에서 인증번호를 확인한 뒤 아래 입력란에 입력해주세요.</p>
           </div>
         </form>
@@ -167,7 +167,7 @@ export function StudentLoginForm() {
                     ref={(element) => {
                       otpRefs.current[index] = element;
                     }}
-                    inputMode="text"
+                    inputMode="numeric"
                     autoComplete={index === 0 ? "one-time-code" : "off"}
                     aria-label={`인증번호 ${index + 1}번째 자리`}
                     maxLength={1}

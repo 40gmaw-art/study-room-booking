@@ -20,7 +20,7 @@ const otpVerifySchema = z.object({
   email: z.string().trim().toLowerCase().email("올바른 이메일 형식이 아닙니다.").refine(isGachonEmail, {
     message: "@gachon.ac.kr 이메일만 사용할 수 있습니다.",
   }),
-  token: z.string().trim().regex(/^[A-Za-z0-9]{8}$/, "인증번호 8자리를 입력해 주세요."),
+  token: z.string().trim().regex(/^\d{6}$/, "인증번호 6자리를 입력해 주세요."),
 });
 
 const adminLoginSchema = z.object({
