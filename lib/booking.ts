@@ -176,12 +176,30 @@ export function getBookingDateValidation(dateKey: string) {
   return { allowed: true, message: "" };
 }
 
+// A slot only counts as "past" when dateKey is TODAY in Asia/Seoul and its
+// start time has already been reached -- a future date's slots are never
+// past, no matter what the current wall-clock time is. Uses the same
+// Intl.DateTimeFormat + explicit "Asia/Seoul" approach as getSeoulDateParts
+// above (zero-padded, timezone-safe) instead of round-tripping through
+// Date.prototype.toLocaleString()/new Date(string), which silently
+// re-parses that string in the runtime's OWN local timezone rather than
+// Seoul's -- producing wrong instants whenever they differ.
 export function isPastTimeSlot(dateKey: string, slotValue: string) {
-  const now = new Date();
-  const seoulNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  const slotDateTime = new Date(`${dateKey}T${slotValue}+09:00`);
+  if (dateKey !== getTodayDateKey()) {
+    return false;
+  }
 
-  return slotDateTime.getTime() <= seoulNow.getTime();
+  const nowParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const map = Object.fromEntries(nowParts.map((part) => [part.type, part.value]));
+  const nowTime = `${map.hour}:${map.minute}:${map.second}`;
+
+  return slotValue <= nowTime;
 }
 
 export function isGachonEmail(email: string) {
