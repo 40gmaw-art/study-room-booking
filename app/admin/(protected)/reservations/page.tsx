@@ -16,7 +16,9 @@ export default async function AdminReservationsPage() {
   // table untouched (existing soft-cancel data/behavior is not affected).
   const { data: reservations } = await supabase
     .from("reservations")
-    .select("id, reservation_number, reservation_date, start_time, name, department, student_number, status, participant_count")
+    .select(
+      "id, reservation_number, reservation_date, start_time, name, department, student_number, status, participant_count, user_id, created_at",
+    )
     .eq("status", "active")
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });

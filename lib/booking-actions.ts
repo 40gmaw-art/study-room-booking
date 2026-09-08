@@ -419,3 +419,109 @@ export async function adminDeleteReservationAction(prevState: unknown, formData:
 
   return { success: true, message: "예약이 삭제되었습니다.", reservationId };
 }
+
+// Admin "예약 관리" screen displays consecutive same-booking 1-hour rows as
+// one merged time-range card (see lib/admin-reservations.ts
+// groupReservationsIntoBookings). Editing/deleting such a card must act on
+// every underlying row, not just one -- these two actions loop the SAME
+// per-row RPCs used by adminUpdateReservationAction/adminDeleteReservationAction
+// above (update_reservation_admin / admin_delete_reservation) once per row
+// ID, so no new RPC or DB logic is introduced. A single-row card still uses
+// the original single-row actions unchanged; these are only used when a
+// card represents more than one row.
+
+export type AdminUpdateReservationGroupState = { success: boolean; message: string };
+
+export async function adminUpdateReservationGroupAction(
+  prevState: AdminUpdateReservationGroupState,
+  formData: FormData,
+): Promise<AdminUpdateReservationGroupState> {
+  const supabase = await createClient();
+  await requireAdminOrRedirect(supabase);
+
+  const reservationIds = formData.getAll("reservationIds").map((value) => String(value)).filter(Boolean);
+  const reservationDates = formData.getAll("reservationDates").map((value) => String(value));
+  const startTimes = formData.getAll("startTimes").map((value) => String(value));
+
+  if (reservationIds.length === 0 || reservationIds.length !== reservationDates.length || reservationIds.length !== startTimes.length) {
+    return { success: false, message: "수정할 예약 정보를 확인할 수 없습니다." };
+  }
+
+  const name = String(formData.get("name") || "").trim();
+  const department = String(formData.get("department") || "").trim();
+  const studentNumber = String(formData.get("studentNumber") || "").trim();
+
+  if (!name || !department || !studentNumber) {
+    return { success: false, message: "이름, 학과, 학번을 모두 입력해 주세요." };
+  }
+
+  const participantCount = parseParticipantCount(formData.get("participantCount"));
+  if (participantCount === null) {
+    return { success: false, message: `예약 인원은 ${MIN_PARTICIPANTS}명 이상 ${MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.` };
+  }
+
+  // Each row keeps its own reservation_date/start_time exactly as it was --
+  // this form only lets the admin correct the shared person-info fields
+  // across every slot in the merged booking, never move/split the time
+  // range (that would need a real atomic multi-row RPC, out of scope here).
+  for (let i = 0; i < reservationIds.length; i += 1) {
+    const dateValidation = getBookingDateValidation(reservationDates[i]);
+    if (!dateValidation.allowed) {
+      return { success: false, message: dateValidation.message };
+    }
+
+    if (!TIME_SLOTS.some((timeSlot) => timeSlot.value === startTimes[i])) {
+      return { success: false, message: "지원하지 않는 시간대가 포함되어 있습니다." };
+    }
+
+    const { error } = await supabase.rpc("update_reservation_admin", {
+      p_reservation_id: reservationIds[i],
+      p_reservation_date: reservationDates[i],
+      p_start_time: startTimes[i],
+      p_name: name,
+      p_department: department,
+      p_student_number: studentNumber,
+      p_participant_count: participantCount,
+    });
+
+    if (error) {
+      return { success: false, message: describeReservationRpcError(error) };
+    }
+  }
+
+  return { success: true, message: "예약 정보를 수정했습니다." };
+}
+
+export type AdminDeleteReservationGroupState = { success: boolean; message: string; reservationIds: string[] };
+
+export async function adminDeleteReservationGroupAction(
+  prevState: AdminDeleteReservationGroupState,
+  formData: FormData,
+): Promise<AdminDeleteReservationGroupState> {
+  const supabase = await createClient();
+  await requireAdminOrRedirect(supabase);
+
+  const reservationIds = formData.getAll("reservationIds").map((value) => String(value)).filter(Boolean);
+  if (reservationIds.length === 0) {
+    return { success: false, message: "삭제할 예약 정보를 확인할 수 없습니다.", reservationIds: [] };
+  }
+
+  const deletedIds: string[] = [];
+  for (const reservationId of reservationIds) {
+    const { data, error } = await supabase.rpc("admin_delete_reservation", {
+      p_reservation_id: reservationId,
+    });
+
+    if (error || !data) {
+      return {
+        success: false,
+        message: describeReservationRpcError(error),
+        reservationIds: deletedIds,
+      };
+    }
+
+    deletedIds.push(reservationId);
+  }
+
+  return { success: true, message: "예약이 삭제되었습니다.", reservationIds: deletedIds };
+}

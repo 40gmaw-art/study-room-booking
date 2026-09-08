@@ -15,7 +15,9 @@ export default async function AdminPage() {
 
   const { data: reservations } = await supabase
     .from("reservations")
-    .select("id, reservation_number, reservation_date, start_time, name, department, student_number, status, participant_count")
+    .select(
+      "id, reservation_number, reservation_date, start_time, name, department, student_number, status, participant_count, user_id, created_at",
+    )
     .eq("status", "active");
 
   const rows = reservations ?? [];
