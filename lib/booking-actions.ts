@@ -222,10 +222,13 @@ export async function getBookingAvailability(dateKey: string) {
 
   return TIME_SLOTS.map((slot) => {
     const detail = data?.find((item: { start_time: string; active_count: number }) => item.start_time === slot.value);
+    // One team per slot: get_time_slot_counts() now returns a row COUNT
+    // (0 or 1), not a participant_count sum, so "full" means "someone has
+    // an active reservation here" -- regardless of that team's size.
     return {
       ...slot,
       count: Number(detail?.active_count ?? 0),
-      full: Number(detail?.active_count ?? 0) >= MAX_PARTICIPANTS,
+      full: Number(detail?.active_count ?? 0) >= 1,
     };
   });
 }

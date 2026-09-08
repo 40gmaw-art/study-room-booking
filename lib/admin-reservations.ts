@@ -34,7 +34,10 @@ export type AdminDateGroup = {
 // Groups reservations by date, then by start time, keeping only slots/dates
 // that actually have at least one reservation. Never introduces synthetic
 // empty groups for the full TIME_SLOTS list or the full booking date range.
-// Capacity is the SUM of participant_count per slot, not the row count.
+// One team per slot: a slot is "full" as soon as ANY active reservation
+// exists for it, regardless of that team's size -- participantTotal/
+// remaining are informational only (how big the one booked team is), not a
+// shared-capacity countdown.
 export function groupActiveReservations(rows: AdminReservationRow[]): AdminDateGroup[] {
   const byDate = new Map<string, Map<string, AdminReservationRow[]>>();
 
@@ -64,7 +67,7 @@ export function groupActiveReservations(rows: AdminReservationRow[]): AdminDateG
         reservationCount: reservations.length,
         participantTotal,
         remaining: Math.max(MAX_PARTICIPANTS_PER_SLOT - participantTotal, 0),
-        full: participantTotal >= MAX_PARTICIPANTS_PER_SLOT,
+        full: reservations.length >= 1,
         reservations,
       };
     });

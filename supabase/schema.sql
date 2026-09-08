@@ -34,6 +34,15 @@ create unique index if not exists reservations_unique_active_idx
 on public.reservations (user_id, reservation_date, start_time)
 where status = 'active';
 
+-- One-team-per-slot policy: at most one ACTIVE reservation may exist for a
+-- given (date, start_time), regardless of which user made it. This is the
+-- hard, structural backstop -- it holds even if some future code path
+-- inserts into reservations without going through create_reservation(_bulk)
+-- or without taking the per-slot advisory lock those functions use.
+create unique index if not exists reservations_one_active_per_slot_idx
+on public.reservations (reservation_date, start_time)
+where status = 'active';
+
 create or replace function public.handle_updated_at()
 returns trigger
 language plpgsql
@@ -147,7 +156,10 @@ language sql
 security definer
 set search_path = public, pg_catalog
 as $$
-  select r.start_time, coalesce(sum(r.participant_count), 0)::bigint as active_count
+  -- One team occupies a slot regardless of its size, so "taken" is a row
+  -- count (0 or 1 once the one-team-per-slot unique index is in place), not
+  -- a participant_count sum.
+  select r.start_time, count(*)::bigint as active_count
   from public.reservations r
   where r.reservation_date = p_date and r.status = 'active'
   group by r.start_time
@@ -197,7 +209,7 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_profile public.profiles%rowtype;
-  v_current_total bigint;
+  v_existing_slot_count int;
   v_reservation public.reservations;
   v_now_seoul timestamp := (now() at time zone 'Asia/Seoul');
   v_today_seoul date := (now() at time zone 'Asia/Seoul')::date;
@@ -237,12 +249,16 @@ begin
   v_lock_key := abs(hashtext(p_reservation_date::text || ':' || p_start_time::text))::bigint;
   perform pg_advisory_xact_lock(v_lock_key);
 
-  select coalesce(sum(participant_count), 0) into v_current_total
+  -- One team per slot: any existing ACTIVE reservation (by anyone) blocks
+  -- this one, regardless of participant_count. The unique partial index
+  -- (reservations_one_active_per_slot_idx) is the final backstop if this
+  -- check is ever bypassed.
+  select count(*) into v_existing_slot_count
   from public.reservations
   where reservation_date = p_reservation_date and start_time = p_start_time and status = 'active';
 
-  if v_current_total + p_participant_count > 8 then
-    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 %명을 예약할 수 없습니다.', greatest(8 - v_current_total, 0), p_participant_count using errcode = '22023';
+  if v_existing_slot_count > 0 then
+    raise exception '%~ 시간대는 이미 다른 예약이 있어 추가할 수 없습니다.', to_char(p_start_time, 'HH24:MI') using errcode = '22023';
   end if;
 
   insert into public.reservations (
@@ -294,7 +310,7 @@ as $$
 declare
   v_reservation public.reservations%rowtype;
   v_lock_key bigint;
-  v_current_total bigint;
+  v_existing_slot_count int;
 begin
   if not public.is_admin_user() then
     raise exception '관리자만 예약을 수정할 수 있습니다.' using errcode = '42501';
@@ -322,15 +338,18 @@ begin
   v_lock_key := abs(hashtext(p_reservation_date::text || ':' || p_start_time::text))::bigint;
   perform pg_advisory_xact_lock(v_lock_key);
 
-  select coalesce(sum(participant_count), 0) into v_current_total
+  -- One team per slot: moving/editing this reservation into a slot that
+  -- already holds another ACTIVE reservation is blocked (its own current
+  -- row is excluded from the check so editing it in place still works).
+  select count(*) into v_existing_slot_count
   from public.reservations
   where reservation_date = p_reservation_date
     and start_time = p_start_time
     and status = 'active'
     and id <> p_reservation_id;
 
-  if v_current_total + p_participant_count > 8 then
-    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 수정할 수 없습니다.', greatest(8 - v_current_total, 0) using errcode = '22023';
+  if v_existing_slot_count > 0 then
+    raise exception '%~ 시간대는 이미 다른 예약이 있어 이동할 수 없습니다.', to_char(p_start_time, 'HH24:MI') using errcode = '22023';
   end if;
 
   update public.reservations
@@ -462,8 +481,8 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_profile public.profiles%rowtype;
-  v_current_total bigint;
   v_existing_count int;
+  v_existing_slot_count int;
   v_existing_daily_slots int;
   v_now_seoul timestamp := (now() at time zone 'Asia/Seoul');
   v_today_seoul date := (now() at time zone 'Asia/Seoul')::date;
@@ -554,16 +573,17 @@ begin
       raise exception '%~ 시간대는 이미 예약하신 시간대입니다.', to_char(v_start_time, 'HH24:MI') using errcode = '22023';
     end if;
 
-    select coalesce(sum(participant_count), 0) into v_current_total
+    -- One team per slot: any OTHER user's active reservation on this exact
+    -- date+time blocks the whole bulk request (all-or-nothing -- nothing
+    -- from this call has been inserted yet at this point).
+    select count(*) into v_existing_slot_count
     from public.reservations
     where reservation_date = p_reservation_date and start_time = v_start_time and status = 'active';
 
-    if v_current_total + p_participant_count > 8 then
-      raise exception '%~% 시간대는 현재 잔여 인원이 %명이므로 %명을 예약할 수 없습니다. 전체 예약이 취소되었습니다.',
+    if v_existing_slot_count > 0 then
+      raise exception '%~% 시간대는 이미 다른 사용자가 예약한 시간대입니다. 전체 예약이 취소되었습니다.',
         to_char(v_start_time, 'HH24:MI'),
-        to_char(v_start_time + interval '1 hour', 'HH24:MI'),
-        greatest(8 - v_current_total, 0),
-        p_participant_count
+        to_char(v_start_time + interval '1 hour', 'HH24:MI')
       using errcode = '22023';
     end if;
   end loop;
