@@ -51,6 +51,42 @@ export function formatDateForInput(date: Date) {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 }
 
+export function getTodayDateKey() {
+  return formatDateForInput(new Date());
+}
+
+export interface CalendarDay {
+  dateKey: string;
+  day: number;
+}
+
+// Builds a month's calendar grid as full Sun-Sat weeks, padding leading/
+// trailing cells with null so every row has exactly 7 columns. Pure Y/M/D
+// arithmetic via Date.UTC (same trick used elsewhere in this file) -- no
+// dependency on the browser's local timezone.
+export function getMonthGridWeeks(year: number, month: number): (CalendarDay | null)[][] {
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
+  const firstWeekday = firstOfMonth.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  const cells: (CalendarDay | null)[] = [];
+  for (let i = 0; i < firstWeekday; i += 1) {
+    cells.push(null);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({ dateKey: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, day });
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  const weeks: (CalendarDay | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
+  return weeks;
+}
+
 function toUtcDateFromSeoulParts(parts: ReturnType<typeof getSeoulDateParts>) {
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
 }
@@ -156,12 +192,47 @@ export function getStatusLabel(status: string) {
   return status === "cancelled" ? "취소됨" : "예정";
 }
 
-export const MIN_PARTICIPANTS = 1;
-export const MAX_PARTICIPANTS = 6;
+export const MIN_PARTICIPANTS = 2;
+export const MAX_PARTICIPANTS = 8;
+
+// A single reservation request can cover at most this many 1-hour slots
+// (i.e. 4 hours) on a given date. Shared by the client UI and the server
+// action so the rule can never drift between them.
+export const MAX_TIME_SLOTS_PER_RESERVATION = 4;
+
+export interface TimeRange {
+  start: string;
+  end: string;
+}
+
+// Display-only merge: combines back-to-back 1-hour slots (previous slot's
+// end === next slot's start) into contiguous ranges. The underlying
+// reservation data still stores/sends individual 1-hour slots -- this never
+// changes what gets booked, only how the selection is summarized on screen.
+export function mergeConsecutiveTimeSlots(slots: Array<{ start: string; end: string }>): TimeRange[] {
+  const sorted = [...slots].sort((a, b) => a.start.localeCompare(b.start));
+  const merged: TimeRange[] = [];
+
+  for (const slot of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && last.end === slot.start) {
+      last.end = slot.end;
+    } else {
+      merged.push({ start: slot.start, end: slot.end });
+    }
+  }
+
+  return merged;
+}
+
+export function formatTimeRange(range: TimeRange) {
+  return `${range.start} ~ ${range.end}`;
+}
 
 // Rejects blank input, non-digit characters (so decimals/negatives/letters
-// never parse), and anything outside 1-6. Shared by server actions and
-// client components so the rule can never drift between them.
+// never parse), and anything outside MIN_PARTICIPANTS-MAX_PARTICIPANTS.
+// Shared by server actions and client components so the rule can never
+// drift between them.
 export function parseParticipantCount(raw: FormDataEntryValue | string | null | undefined): number | null {
   const text = String(raw ?? "").trim();
   if (!/^\d+$/.test(text)) {

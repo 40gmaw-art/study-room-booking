@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogoutButton } from "@/components/logout-button";
-import { formatDateForDisplay, getBookingDateOptions, getDefaultBookingDate, isPastTimeSlot, MAX_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
-import { createReservationsBulkAction, getBookingAvailability } from "@/lib/booking-actions";
+import { DateCalendar } from "@/components/date-calendar";
+import { formatTimeRange, getBookingDateOptions, getDefaultBookingDate, isPastTimeSlot, mergeConsecutiveTimeSlots, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
+import { createReservationsBulkAction, getBookingAvailability, getMyActiveReservedSlots } from "@/lib/booking-actions";
 import { useActionState } from "react";
 
 type SlotAvailability = { value: string; label: string; count: number; full: boolean };
@@ -21,9 +22,10 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   const searchParams = useSearchParams();
   const [selectedDate, setSelectedDate] = useState<string>(getDefaultBookingDate());
   const [slots, setSlots] = useState<SlotAvailability[]>([]);
+  const [myReservedSlots, setMyReservedSlots] = useState<Set<string>>(new Set());
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const [removalNotice, setRemovalNotice] = useState<string | null>(null);
-  const [participantCountInput, setParticipantCountInput] = useState("1");
+  const [participantCountInput, setParticipantCountInput] = useState(String(MIN_PARTICIPANTS));
   const selectedSlotsRef = useRef(selectedSlots);
 
   const [state, formAction] = useActionState(createReservationsBulkAction, {
@@ -67,9 +69,13 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
 
     let isActive = true;
     void (async () => {
-      const nextSlots = await getBookingAvailability(selectedDate);
+      const [nextSlots, myActiveSlots] = await Promise.all([
+        getBookingAvailability(selectedDate),
+        getMyActiveReservedSlots(selectedDate),
+      ]);
       if (isActive) {
         applyAvailability(nextSlots);
+        setMyReservedSlots(new Set(myActiveSlots));
       }
     })();
     return () => {
@@ -84,8 +90,12 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
 
     const interval = setInterval(() => {
       void (async () => {
-        const nextSlots = await getBookingAvailability(selectedDate);
+        const [nextSlots, myActiveSlots] = await Promise.all([
+          getBookingAvailability(selectedDate),
+          getMyActiveReservedSlots(selectedDate),
+        ]);
         applyAvailability(nextSlots);
+        setMyReservedSlots(new Set(myActiveSlots));
       })();
     }, AVAILABILITY_REFRESH_MS);
 
@@ -95,6 +105,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   useEffect(() => {
     setSelectedSlots(new Set());
     setRemovalNotice(null);
+    setMyReservedSlots(new Set());
   }, [selectedDate]);
 
   useEffect(() => {
@@ -105,8 +116,12 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
     setSelectedSlots(new Set());
     setRemovalNotice(null);
     void (async () => {
-      const nextSlots = await getBookingAvailability(selectedDate);
+      const [nextSlots, myActiveSlots] = await Promise.all([
+        getBookingAvailability(selectedDate),
+        getMyActiveReservedSlots(selectedDate),
+      ]);
       applyAvailability(nextSlots);
+      setMyReservedSlots(new Set(myActiveSlots));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -131,6 +146,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   const isSelectedDateEnabled = selectedDateAvailability?.enabled ?? false;
 
   const selectedSlotList = TIME_SLOTS.filter((slot) => selectedSlots.has(slot.value));
+  const mergedTimeRanges = mergeConsecutiveTimeSlots(selectedSlotList);
 
   function toggleSlot(value: string) {
     setRemovalNotice(null);
@@ -148,7 +164,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   // Only digits, no decimals/negatives/blank/letters allowed through.
   const isParticipantCountWellFormed = /^\d+$/.test(participantCountInput);
   const participantCount = isParticipantCountWellFormed ? Number(participantCountInput) : NaN;
-  const isParticipantCountInRange = isParticipantCountWellFormed && participantCount >= 1 && participantCount <= MAX_PARTICIPANTS;
+  const isParticipantCountInRange = isParticipantCountWellFormed && participantCount >= MIN_PARTICIPANTS && participantCount <= MAX_PARTICIPANTS;
 
   // The most people that can fit into EVERY selected slot at once (the
   // smallest remaining headroom across the current selection).
@@ -166,7 +182,17 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
     selectedSlotList.length > 0 && isParticipantCountInRange && participantCount > maxAllowedForSelection;
   const isParticipantCountValid = isParticipantCountInRange && !exceedsAvailableCapacity;
 
-  const canSubmit = selectedSlotList.length > 0 && isSelectedDateEnabled && isParticipantCountValid;
+  // Hours already ACTIVE for the current user on the selected date (from a
+  // separate, earlier booking). The 4-hour cap applies to the running daily
+  // total, not just to this one selection, so the remaining budget shrinks
+  // by however many hours are already booked.
+  const myUsedSlotCount = myReservedSlots.size;
+  const remainingDailyBudget = Math.max(MAX_TIME_SLOTS_PER_RESERVATION - myUsedSlotCount, 0);
+  const dailyBudgetExhausted = remainingDailyBudget === 0;
+
+  const exceedsMaxTimeSlots = selectedSlotList.length > remainingDailyBudget;
+
+  const canSubmit = selectedSlotList.length > 0 && isSelectedDateEnabled && isParticipantCountValid && !exceedsMaxTimeSlots;
 
   return (
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -189,27 +215,11 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
 
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>날짜 선택</CardTitle>
-            <CardDescription>평일에만 이용할 수 있으며, 다음 주 금요일까지 예약 가능합니다.</CardDescription>
+            <CardTitle className="md:text-lg">날짜 선택</CardTitle>
+            <CardDescription className="md:text-base">평일에만 이용할 수 있으며, 다음 주 금요일까지 예약 가능합니다.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {availableDates.map((option) => {
-                const selected = option.date === selectedDate;
-                return (
-                  <button
-                    key={option.date}
-                    type="button"
-                    onClick={() => option.enabled && setSelectedDate(option.date)}
-                    disabled={!option.enabled}
-                    className={`rounded-2xl border px-3 py-3 text-sm font-semibold ${selected ? "border-[#4B3B71] bg-[#4B3B71] text-white" : "border-slate-200 bg-white text-slate-700"} ${option.enabled ? "" : "cursor-not-allowed bg-slate-50 text-slate-400"}`}
-                  >
-                    <div>{option.date.slice(5)}</div>
-                    <div className="text-xs opacity-80">{formatDateForDisplay(option.date)}</div>
-                  </button>
-                );
-              })}
-            </div>
+            <DateCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
           </CardContent>
         </Card>
 
@@ -217,28 +227,63 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
           <CardHeader>
             <CardTitle>시간대 선택</CardTitle>
             <CardDescription>
-              각 시간대마다 최대 6명, 이미 만석이면 예약할 수 없습니다. 여러 시간대를 함께 선택할 수 있습니다.
+              최소 2인에서 최대 8인까지 예약하실 수 있으며, 선착순에 따라 최대 4시간까지 이용 가능합니다.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {removalNotice ? (
               <div className="mb-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">{removalNotice}</div>
             ) : null}
+            {dailyBudgetExhausted ? (
+              <div className="mb-3 rounded-2xl border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                이 날짜에 이미 최대 {MAX_TIME_SLOTS_PER_RESERVATION}시간을 예약하셨습니다. 추가로 예약하려면 기존 예약을 취소해 주세요.
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {TIME_SLOTS.map((slot) => {
                 const detail = slots.find((item) => item.value === slot.value);
-                const count = detail?.count ?? 0;
-                const remaining = Math.max(MAX_PARTICIPANTS - count, 0);
                 const isPast = isPastTimeSlot(selectedDate, slot.value);
-                const disabled = !isSelectedDateEnabled || Boolean(detail?.full) || isPast;
+                const alreadyReservedByMe = myReservedSlots.has(slot.value);
+                // Priority: my own reservation > someone else's (room full) >
+                // past slot > my daily 4-hour budget used up > selectable.
+                // Each flag below is mutually exclusive by construction, so
+                // exactly one of them (or none) explains why a slot is
+                // disabled -- that single reason drives both the label text
+                // and its color, so they can never disagree with each other.
+                const reservedByOthers = Boolean(detail?.full) && !alreadyReservedByMe;
+                const limitedByDailyCap = !alreadyReservedByMe && !reservedByOthers && !isPast && dailyBudgetExhausted;
+                const disabled =
+                  !isSelectedDateEnabled || alreadyReservedByMe || reservedByOthers || isPast || limitedByDailyCap;
                 const active = selectedSlots.has(slot.value);
                 const statusText = !isSelectedDateEnabled
                   ? "예약 불가"
-                  : detail?.full
-                    ? "예약 마감"
-                    : isPast
-                      ? "지난 시간대"
-                      : `잔여 ${remaining}명`;
+                  : alreadyReservedByMe
+                    ? "이미 예약됨"
+                    : reservedByOthers
+                      ? "예약 마감"
+                      : isPast
+                        ? "지난 시간대"
+                        : limitedByDailyCap
+                          ? "선택 불가"
+                          : null;
+
+                const cardToneClass = alreadyReservedByMe
+                  ? "border-[#4B3B71]/25 bg-[#f5efff]"
+                  : reservedByOthers
+                    ? "border-red-200 bg-red-50"
+                    : limitedByDailyCap
+                      ? "border-slate-200 bg-slate-100"
+                      : disabled
+                        ? "border-slate-200 bg-white opacity-60"
+                        : "border-slate-200 bg-white";
+
+                const statusTextToneClass = alreadyReservedByMe
+                  ? "font-semibold text-[#4B3B71]"
+                  : reservedByOthers
+                    ? "font-semibold text-red-600"
+                    : limitedByDailyCap
+                      ? "font-semibold text-slate-500"
+                      : "text-slate-600";
 
                 return (
                   <button
@@ -247,14 +292,12 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
                     onClick={() => !disabled && toggleSlot(slot.value)}
                     disabled={disabled}
                     aria-pressed={active}
-                    className={`rounded-2xl border px-4 py-4 text-left transition-colors ${active ? "border-[#4B3B71] bg-[#f5efff] ring-1 ring-[#4B3B71]" : "border-slate-200 bg-white"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+                    className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
+                      active ? "border-[#4B3B71] bg-[#f5efff] ring-1 ring-[#4B3B71]" : cardToneClass
+                    } ${disabled ? "cursor-not-allowed" : ""}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">{slot.label}</span>
-                      <span className="text-sm text-[#4B3B71]">{count}/{MAX_PARTICIPANTS}명</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-sm text-slate-600">{statusText}</span>
+                      <span className="font-semibold">{formatTimeRange(slot)}</span>
                       {active ? (
                         <span className="flex items-center gap-1 text-xs font-semibold text-[#4B3B71]">
                           <Check className="h-3.5 w-3.5" />
@@ -262,17 +305,31 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
                         </span>
                       ) : null}
                     </div>
+                    {statusText ? <div className={`mt-2 text-sm ${statusTextToneClass}`}>{statusText}</div> : null}
                   </button>
                 );
               })}
             </div>
 
-            {selectedSlotList.length > 0 ? (
+            {exceedsMaxTimeSlots ? (
+              <div className="mt-4 rounded-2xl border border-red-300 bg-red-50 p-4">
+                <p className="text-sm font-bold text-red-700">
+                  {myUsedSlotCount > 0
+                    ? `이 날짜에 이미 ${myUsedSlotCount}시간을 예약하셨습니다. 하루 최대 ${MAX_TIME_SLOTS_PER_RESERVATION}시간까지만 예약할 수 있습니다.`
+                    : "한 번에 최대 4시간까지만 예약할 수 있습니다."}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-red-600">
+                  선택한 시간대가 {selectedSlotList.length}개입니다. 최대 {remainingDailyBudget}개까지 선택할 수 있습니다.
+                </p>
+              </div>
+            ) : null}
+
+            {mergedTimeRanges.length > 0 ? (
               <div className="mt-4 rounded-2xl border border-[#4B3B71]/15 bg-[#f5efff] p-4">
-                <p className="text-sm font-semibold text-[#4B3B71]">선택한 시간대 {selectedSlotList.length}개</p>
+                <p className="text-sm font-semibold text-[#4B3B71]">선택한 시간대 {mergedTimeRanges.length}개</p>
                 <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                  {selectedSlotList.map((slot) => (
-                    <li key={slot.value}>· {slot.label}</li>
+                  {mergedTimeRanges.map((range) => (
+                    <li key={`${range.start}-${range.end}`}>· {formatTimeRange(range)}</li>
                   ))}
                 </ul>
               </div>
@@ -310,7 +367,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
                   name="participantCount"
                   type="number"
                   inputMode="numeric"
-                  min={1}
+                  min={MIN_PARTICIPANTS}
                   max={MAX_PARTICIPANTS}
                   step={1}
                   value={participantCountInput}
@@ -322,20 +379,32 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
                   <p className={`text-xs font-semibold ${exceedsAvailableCapacity ? "text-red-600" : "text-[#4B3B71]"}`}>
                     {exceedsAvailableCapacity
                       ? "선택한 시간대 중 잔여 인원이 부족한 시간대가 있습니다."
-                      : `선택한 시간대에 최대 ${maxAllowedForSelection}명까지 예약할 수 있습니다.`}
+                      : `선택한 시간대에 최소 ${MIN_PARTICIPANTS}명에서 최대 ${maxAllowedForSelection}명까지 예약할 수 있습니다.`}
                   </p>
                 ) : null}
                 {!isParticipantCountWellFormed || (isParticipantCountWellFormed && !isParticipantCountInRange) ? (
-                  <p className="text-xs font-semibold text-red-600">예약 인원은 1명 이상 6명 이하의 숫자로 입력해 주세요.</p>
+                  <p className="text-xs font-semibold text-red-600">
+                    예약 인원은 {MIN_PARTICIPANTS}명 이상 {MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.
+                  </p>
                 ) : null}
               </div>
               <div className="rounded-2xl bg-[#f8f4ff] p-4 text-sm text-slate-700">
                 <div>예약일: {selectedDate}</div>
-                <div className="mt-2 font-semibold text-[#4B3B71]">선택한 시간대 {selectedSlotList.length}개</div>
-                {selectedSlotList.length > 0 ? (
+                <div className={`mt-2 font-semibold ${exceedsMaxTimeSlots ? "text-red-600" : "text-[#4B3B71]"}`}>
+                  선택한 시간대 {mergedTimeRanges.length}개
+                </div>
+                {exceedsMaxTimeSlots ? (
+                  <div className="mt-1 text-xs font-semibold text-red-600">
+                    {myUsedSlotCount > 0
+                      ? `이 날짜에 이미 ${myUsedSlotCount}시간을 예약하셔서 추가로 ${remainingDailyBudget}시간(개)까지만 예약할 수 있습니다.`
+                      : `최대 ${MAX_TIME_SLOTS_PER_RESERVATION}시간(개)까지만 예약할 수 있습니다.`}{" "}
+                    시간대를 {selectedSlotList.length - remainingDailyBudget}개 이상 해제해 주세요.
+                  </div>
+                ) : null}
+                {mergedTimeRanges.length > 0 ? (
                   <ul className="mt-1 space-y-1">
-                    {selectedSlotList.map((slot) => (
-                      <li key={slot.value}>· {slot.label}</li>
+                    {mergedTimeRanges.map((range) => (
+                      <li key={`${range.start}-${range.end}`}>· {formatTimeRange(range)}</li>
                     ))}
                   </ul>
                 ) : (
@@ -361,11 +430,15 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
               >
                 {selectedSlotList.length === 0
                   ? "시간대를 선택해주세요"
-                  : !isParticipantCountInRange
-                    ? "예약 인원을 확인해주세요"
-                    : exceedsAvailableCapacity
-                      ? "예약 가능 인원을 초과했습니다"
-                      : `${selectedSlotList.length}개 시간대 · ${participantCount}명 예약하기`}
+                  : exceedsMaxTimeSlots
+                    ? myUsedSlotCount > 0
+                      ? "하루 예약 가능 시간을 초과했습니다"
+                      : "한 번에 최대 4시간까지만 예약할 수 있습니다"
+                    : !isParticipantCountInRange
+                      ? "예약 인원을 확인해주세요"
+                      : exceedsAvailableCapacity
+                        ? "예약 가능 인원을 초과했습니다"
+                        : `${selectedSlotList.length}개 시간대 · ${participantCount}명 예약하기`}
               </Button>
             </form>
           </CardContent>

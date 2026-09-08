@@ -11,12 +11,13 @@ import {
   adminUpdateReservationAction,
   type AdminCreateReservationState,
 } from "@/lib/booking-actions";
-import { formatDateForDisplay, getStatusLabel, TIME_SLOTS } from "@/lib/booking";
+import { formatDateForDisplay, getStatusLabel, MAX_PARTICIPANTS, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
 import {
   type AdminReservationRow,
   formatFullKoreanDate,
   formatFullKoreanDateWithWeekday,
   groupActiveReservations,
+  MAX_PARTICIPANTS_PER_SLOT,
   slotLabelFor,
 } from "@/lib/admin-reservations";
 
@@ -181,8 +182,8 @@ export function AdminReservationManager({
                 name="participantCount"
                 type="number"
                 inputMode="numeric"
-                min={1}
-                max={6}
+                min={MIN_PARTICIPANTS}
+                max={MAX_PARTICIPANTS}
                 step={1}
                 value={createParticipantCount}
                 onChange={(event) => setCreateParticipantCount(event.target.value)}
@@ -221,7 +222,7 @@ export function AdminReservationManager({
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-semibold text-[#241b35]">{slot.label}</span>
                     <span className={`text-sm font-semibold ${slot.full ? "text-red-600" : "text-[#4B3B71]"}`}>
-                      {slot.participantTotal}/6명 · {slot.full ? "만석" : `잔여 ${slot.remaining}명`}
+                      {slot.participantTotal}/{MAX_PARTICIPANTS_PER_SLOT}명 · {slot.full ? "만석" : `잔여 ${slot.remaining}명`}
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -345,8 +346,8 @@ export function AdminReservationManager({
                                 name="participantCount"
                                 type="number"
                                 inputMode="numeric"
-                                min={1}
-                                max={6}
+                                min={MIN_PARTICIPANTS}
+                                max={MAX_PARTICIPANTS}
                                 step={1}
                                 defaultValue={reservation.participant_count}
                               />

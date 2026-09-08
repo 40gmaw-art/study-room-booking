@@ -1,6 +1,6 @@
 import { TIME_SLOTS } from "@/lib/booking";
 
-export const MAX_PARTICIPANTS_PER_SLOT = 6;
+export const MAX_PARTICIPANTS_PER_SLOT = 8;
 
 export type AdminReservationRow = {
   id: string;

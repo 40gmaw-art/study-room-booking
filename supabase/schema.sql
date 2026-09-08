@@ -21,7 +21,7 @@ create table if not exists public.reservations (
   reservation_date date not null,
   start_time time not null,
   status text not null default 'active' check (status in ('active','cancelled')),
-  participant_count integer not null default 1 check (participant_count >= 1 and participant_count <= 6),
+  participant_count integer not null default 2 check (participant_count >= 2 and participant_count <= 8),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   cancelled_at timestamptz
@@ -220,8 +220,8 @@ begin
     raise exception '프로필 정보가 완성되어야 합니다.' using errcode = '42501';
   end if;
 
-  if p_participant_count is null or p_participant_count < 1 or p_participant_count > 6 then
-    raise exception '예약 인원은 1명 이상 6명 이하만 가능합니다.' using errcode = '22023';
+  if p_participant_count is null or p_participant_count < 2 or p_participant_count > 8 then
+    raise exception '예약 인원은 2명 이상 8명 이하만 가능합니다.' using errcode = '22023';
   end if;
 
   perform public.validate_reservation_date(p_reservation_date);
@@ -241,8 +241,8 @@ begin
   from public.reservations
   where reservation_date = p_reservation_date and start_time = p_start_time and status = 'active';
 
-  if v_current_total + p_participant_count > 6 then
-    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 %명을 예약할 수 없습니다.', greatest(6 - v_current_total, 0), p_participant_count using errcode = '22023';
+  if v_current_total + p_participant_count > 8 then
+    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 %명을 예약할 수 없습니다.', greatest(8 - v_current_total, 0), p_participant_count using errcode = '22023';
   end if;
 
   insert into public.reservations (
@@ -300,8 +300,8 @@ begin
     raise exception '관리자만 예약을 수정할 수 있습니다.' using errcode = '42501';
   end if;
 
-  if p_participant_count is null or p_participant_count < 1 or p_participant_count > 6 then
-    raise exception '예약 인원은 1명 이상 6명 이하만 가능합니다.' using errcode = '22023';
+  if p_participant_count is null or p_participant_count < 2 or p_participant_count > 8 then
+    raise exception '예약 인원은 2명 이상 8명 이하만 가능합니다.' using errcode = '22023';
   end if;
 
   perform public.validate_reservation_date(p_reservation_date);
@@ -329,8 +329,8 @@ begin
     and status = 'active'
     and id <> p_reservation_id;
 
-  if v_current_total + p_participant_count > 6 then
-    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 수정할 수 없습니다.', greatest(6 - v_current_total, 0) using errcode = '22023';
+  if v_current_total + p_participant_count > 8 then
+    raise exception '해당 시간대는 잔여 인원(%명)이 부족하여 수정할 수 없습니다.', greatest(8 - v_current_total, 0) using errcode = '22023';
   end if;
 
   update public.reservations
@@ -464,9 +464,11 @@ declare
   v_profile public.profiles%rowtype;
   v_current_total bigint;
   v_existing_count int;
+  v_existing_daily_slots int;
   v_now_seoul timestamp := (now() at time zone 'Asia/Seoul');
   v_today_seoul date := (now() at time zone 'Asia/Seoul')::date;
   v_lock_key bigint;
+  v_daily_lock_key bigint;
   v_start_time time;
   v_sorted_times time[];
   v_reservation public.reservations%rowtype;
@@ -479,8 +481,8 @@ begin
     raise exception '예약할 시간대를 선택해 주세요.' using errcode = '22023';
   end if;
 
-  if p_participant_count is null or p_participant_count < 1 or p_participant_count > 6 then
-    raise exception '예약 인원은 1명 이상 6명 이하만 가능합니다.' using errcode = '22023';
+  if p_participant_count is null or p_participant_count < 2 or p_participant_count > 8 then
+    raise exception '예약 인원은 2명 이상 8명 이하만 가능합니다.' using errcode = '22023';
   end if;
 
   select * into v_profile from public.profiles where id = v_user_id;
@@ -511,6 +513,30 @@ begin
     end if;
   end loop;
 
+  -- Daily cap: this user's ACTIVE reservations for THIS date, summed with
+  -- the new slots being requested now, must not exceed 4 hours total.
+  -- Locked on (user_id, date) -- a keyspace distinct from the per-slot locks
+  -- below -- so two concurrent requests from the same user for the same
+  -- date serialize here instead of both reading "0 used" and both
+  -- succeeding. This is what actually prevents the daily limit from being
+  -- bypassed by simultaneous requests (the client-side check in
+  -- lib/booking-actions.ts is a fast-path UX nicety only, not a guarantee).
+  v_daily_lock_key := abs(hashtext(v_user_id::text || ':' || p_reservation_date::text || ':daily'))::bigint;
+  perform pg_advisory_xact_lock(v_daily_lock_key);
+
+  select count(*) into v_existing_daily_slots
+  from public.reservations
+  where user_id = v_user_id
+    and reservation_date = p_reservation_date
+    and status = 'active';
+
+  if v_existing_daily_slots + array_length(v_sorted_times, 1) > 4 then
+    raise exception '해당 날짜에는 이미 %시간을 예약하셨습니다. 하루 최대 4시간까지만 예약할 수 있어 %시간만 추가로 예약하실 수 있습니다.',
+      v_existing_daily_slots,
+      greatest(4 - v_existing_daily_slots, 0)
+      using errcode = '22023';
+  end if;
+
   foreach v_start_time in array v_sorted_times loop
     v_lock_key := abs(hashtext(p_reservation_date::text || ':' || v_start_time::text))::bigint;
     perform pg_advisory_xact_lock(v_lock_key);
@@ -532,11 +558,11 @@ begin
     from public.reservations
     where reservation_date = p_reservation_date and start_time = v_start_time and status = 'active';
 
-    if v_current_total + p_participant_count > 6 then
+    if v_current_total + p_participant_count > 8 then
       raise exception '%~% 시간대는 현재 잔여 인원이 %명이므로 %명을 예약할 수 없습니다. 전체 예약이 취소되었습니다.',
         to_char(v_start_time, 'HH24:MI'),
         to_char(v_start_time + interval '1 hour', 'HH24:MI'),
-        greatest(6 - v_current_total, 0),
+        greatest(8 - v_current_total, 0),
         p_participant_count
       using errcode = '22023';
     end if;

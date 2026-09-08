@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
+import { getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
 import { verifyAdminSession } from "@/lib/admin-session";
 import { formatFullKoreanDate, slotLabelFor, type AdminReservationRow } from "@/lib/admin-reservations";
 
@@ -69,6 +69,10 @@ export async function createReservationsBulkAction(prevState: unknown, formData:
     return { ...emptyResult, message: "예약 날짜와 시간대를 선택해 주세요." };
   }
 
+  if (times.length > MAX_TIME_SLOTS_PER_RESERVATION) {
+    return { ...emptyResult, message: "한 번에 최대 4시간까지만 예약할 수 있습니다." };
+  }
+
   const dateValidation = getBookingDateValidation(date);
   if (!dateValidation.allowed) {
     return { ...emptyResult, message: dateValidation.message };
@@ -79,7 +83,7 @@ export async function createReservationsBulkAction(prevState: unknown, formData:
   }
 
   if (participantCount === null) {
-    return { ...emptyResult, message: "예약 인원은 1명 이상 6명 이하의 숫자로 입력해 주세요." };
+    return { ...emptyResult, message: `예약 인원은 ${MIN_PARTICIPANTS}명 이상 ${MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.` };
   }
 
   const supabase = await createClient();
@@ -89,6 +93,20 @@ export async function createReservationsBulkAction(prevState: unknown, formData:
 
   if (!user) {
     redirect("/login");
+  }
+
+  // Fast-path check for a friendly message before hitting the RPC. This is
+  // NOT the authoritative guard against concurrent double-booking (a race
+  // between this read and the insert is still possible from two simultaneous
+  // requests) -- create_reservations_bulk itself re-checks this same total
+  // under a per-user/per-date advisory lock, which is what actually prevents
+  // the daily cap from being bypassed.
+  const existingActiveSlots = await getMyActiveReservedSlots(date);
+  if (existingActiveSlots.length + times.length > MAX_TIME_SLOTS_PER_RESERVATION) {
+    return {
+      ...emptyResult,
+      message: `해당 날짜에는 이미 ${existingActiveSlots.length}시간을 예약하셨습니다. 하루 최대 ${MAX_TIME_SLOTS_PER_RESERVATION}시간까지만 예약할 수 있습니다.`,
+    };
   }
 
   const { data, error } = await supabase.rpc("create_reservations_bulk", {
@@ -150,6 +168,41 @@ export async function cancelReservationAction(prevState: unknown, formData: Form
     message: "예약이 취소되었습니다.",
     reservationNumber: data.reservation_number,
   };
+}
+
+// The current user's own ACTIVE reservations for one date, as start_time
+// values (e.g. "10:00:00") matching TIME_SLOTS[].value. Used both to gray
+// out/disable slots the user already holds that date, and as the basis for
+// the "max 4 hours per user per day" budget check. Scoped to auth.uid() via
+// the query filter (matches the reservations_self_select RLS policy), so
+// another user's bookings never affect what this caller sees here.
+export async function getMyActiveReservedSlots(dateKey: string): Promise<string[]> {
+  const dateValidation = getBookingDateValidation(dateKey);
+  if (!dateValidation.allowed) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("reservations")
+    .select("start_time")
+    .eq("user_id", user.id)
+    .eq("reservation_date", dateKey)
+    .eq("status", "active");
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map((row) => row.start_time as string);
 }
 
 export async function getBookingAvailability(dateKey: string) {
@@ -255,7 +308,7 @@ export async function adminCreateReservationAction(
   }
 
   if (participantCount === null) {
-    return { ...empty, message: "예약 인원은 1명 이상 6명 이하의 숫자로 입력해 주세요." };
+    return { ...empty, message: `예약 인원은 ${MIN_PARTICIPANTS}명 이상 ${MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.` };
   }
 
   const { data, error } = await supabase.rpc("create_reservation", {
