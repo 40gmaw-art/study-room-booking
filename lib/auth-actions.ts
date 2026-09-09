@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -219,6 +220,12 @@ export async function verifyStudentOtp(prevState: unknown, formData: FormData) {
   // Guarantee a fresh student login never carries an admin-mode session,
   // even if the same account also happens to hold profiles.role === 'admin'.
   await clearAdminSession();
+  // Bust the Next.js client router cache for every route (they all nest
+  // under the one root layout). Without this, a route rendered under a
+  // PREVIOUS session (e.g. the admin buttons on "/") can still be served
+  // from the router cache for a while after this auth change, showing the
+  // wrong role's UI intermittently until that cache entry naturally expires.
+  revalidatePath("/", "layout");
   redirect("/booking");
 }
 
@@ -265,6 +272,10 @@ export async function signOutUser() {
   cookieStore.delete("study-room-profile");
   await clearAdminSession();
   await supabase.auth.signOut();
+  // Same reasoning as verifyStudentOtp: without this, a subsequent login
+  // (as either role) could briefly see a route cache entry rendered while
+  // this session was still active.
+  revalidatePath("/", "layout");
   redirect("/");
 }
 
@@ -332,6 +343,10 @@ export async function signInAdmin(prevState: unknown, formData: FormData) {
     };
   }
 
+  // Same reasoning as verifyStudentOtp/signOutUser: without this, "/" (and
+  // any other route visited earlier in this browser) could still serve a
+  // router-cache entry rendered under the previous role/session.
+  revalidatePath("/", "layout");
   redirect("/admin");
 }
 
