@@ -270,8 +270,7 @@ export function AdminReservationManager({
             <CardHeader>
               <CardTitle>{formatFullKoreanDateWithWeekday(dateGroup.date)}</CardTitle>
               <CardDescription>
-                총 예약 {dateGroup.bookings.length}건 · 예약된 시간대 {dateGroup.totalReservationCount}개 · 총 예약 인원{" "}
-                {dateGroup.totalParticipantCount}명
+                총 예약 {dateGroup.bookings.length}건 · 예약된 시간대 {dateGroup.totalReservationCount}개
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -280,12 +279,11 @@ export function AdminReservationManager({
                   <div key={booking.key} className="rounded-2xl border border-slate-200 bg-white p-3">
                     <div className="mb-2 font-semibold text-[#241b35]">{booking.label}</div>
                     {/* Desktop row */}
-                    <div className="hidden items-center gap-3 sm:grid sm:grid-cols-[1.1fr_0.9fr_0.9fr_0.7fr_1.2fr_0.7fr_auto_auto]">
+                    <div className="hidden items-center gap-3 sm:grid sm:grid-cols-[1.1fr_0.9fr_0.9fr_0.7fr_0.7fr_auto_auto]">
                       <span className="font-semibold text-[#241b35]">{booking.name}</span>
                       <span className="text-sm text-slate-600">{booking.department}</span>
                       <span className="text-sm text-slate-600">{booking.student_number}</span>
                       <span className="text-sm font-semibold text-[#4B3B71]">{booking.participant_count}명</span>
-                      <span className="truncate text-xs text-slate-400">{booking.reservation_number}</span>
                       <span className="text-xs font-semibold text-[#4B3B71]">{getStatusLabel(booking.status)}</span>
                       <Button
                         type="button"
@@ -315,7 +313,6 @@ export function AdminReservationManager({
                         {booking.department} · {booking.student_number}
                       </span>
                       <span className="text-sm font-semibold text-[#4B3B71]">예약 인원 {booking.participant_count}명</span>
-                      <span className="text-xs text-slate-400">{booking.reservation_number}</span>
                       <span className="text-xs font-semibold text-[#4B3B71]">{getStatusLabel(booking.status)}</span>
                       <div className="mt-2 flex gap-2">
                         <Button
@@ -427,12 +424,11 @@ export function AdminReservationManager({
                   <div key={booking.key} className="rounded-2xl border border-slate-200 bg-white p-3">
                     <div className="mb-2 font-semibold text-[#241b35]">{booking.label}</div>
                     {/* Desktop row */}
-                    <div className="hidden items-center gap-3 sm:grid sm:grid-cols-[1.1fr_0.9fr_0.9fr_0.7fr_1.2fr_0.7fr_auto_auto]">
+                    <div className="hidden items-center gap-3 sm:grid sm:grid-cols-[1.1fr_0.9fr_0.9fr_0.7fr_0.7fr_auto_auto]">
                       <span className="font-semibold text-[#241b35]">{booking.name}</span>
                       <span className="text-sm text-slate-600">{booking.department}</span>
                       <span className="text-sm text-slate-600">{booking.student_number}</span>
                       <span className="text-sm font-semibold text-[#4B3B71]">{booking.participant_count}명</span>
-                      <span className="truncate text-xs text-slate-400">{booking.reservation_number}</span>
                       <span className="text-xs font-semibold text-[#4B3B71]">{getStatusLabel(booking.status)}</span>
                       <Button
                         type="button"
@@ -462,7 +458,6 @@ export function AdminReservationManager({
                         {booking.department} · {booking.student_number}
                       </span>
                       <span className="text-sm font-semibold text-[#4B3B71]">예약 인원 {booking.participant_count}명</span>
-                      <span className="text-xs text-slate-400">{booking.reservation_number}</span>
                       <span className="text-xs font-semibold text-[#4B3B71]">{getStatusLabel(booking.status)}</span>
                       <div className="mt-2 flex gap-2">
                         <Button

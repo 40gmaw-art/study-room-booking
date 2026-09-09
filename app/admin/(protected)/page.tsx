@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogoutButton } from "@/components/logout-button";
 import { createClient } from "@/lib/supabase/server";
-import { countFullSlots, sumParticipants } from "@/lib/admin-reservations";
+import { countFullSlots, groupReservationsIntoBookings, sumParticipants } from "@/lib/admin-reservations";
 import { getSeoulDateParts } from "@/lib/booking";
 
 export const revalidate = 0;
@@ -32,6 +32,11 @@ export default async function AdminPage() {
 
   const fullSlotCount = countFullSlots(rows);
 
+  // Reuses the same merge logic as the "예약 관리" screen so a bulk booking's
+  // consecutive hours (e.g. 13:00~14:00 + 14:00~15:00) show as one range
+  // ("13:00 ~ 15:00") here too, instead of one line per 1-hour row.
+  const todayBookings = groupReservationsIntoBookings(rows).find((group) => group.date === todayKey)?.bookings ?? [];
+
   return (
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -50,6 +55,28 @@ export default async function AdminPage() {
             <LogoutButton className="rounded-full" />
           </div>
         </header>
+
+        <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
+          <CardContent className="p-6">
+            {todayBookings.length > 0 ? (
+              <>
+                <p className="text-2xl font-bold text-[#4B3B71] sm:text-3xl">오늘 예약이 있습니다.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {todayBookings.map((booking) => (
+                    <span
+                      key={booking.key}
+                      className="rounded-full bg-[#f5efff] px-4 py-2 text-base font-semibold text-[#4B3B71] sm:text-lg"
+                    >
+                      {booking.label}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-2xl font-bold text-slate-400 sm:text-3xl">오늘 예약이 없습니다.</p>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
