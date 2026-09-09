@@ -169,13 +169,18 @@ export default async function Home() {
                     <Link href={isLoggedIn ? "/booking" : "/login"}>로그인하고 예약하기</Link>
                   </Button>
                 ) : null}
-                <Button
-                  asChild
-                  variant="outline"
-                  className="h-12 w-full rounded-full border-2 border-[#4B3B71]/20 px-8 text-base font-semibold text-[#4B3B71] hover:bg-[#f5efff] sm:w-auto"
-                >
-                  <Link href={isStudent ? "/my-reservations" : "/cancel"}>예약 조회·취소</Link>
-                </Button>
+                {/* A guest has no reservation to look up, so this only makes
+                    sense once logged in as a student (admin is already
+                    excluded by the outer !isAdmin check above). */}
+                {isStudent ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-12 w-full rounded-full border-2 border-[#4B3B71]/20 px-8 text-base font-semibold text-[#4B3B71] hover:bg-[#f5efff] sm:w-auto"
+                  >
+                    <Link href="/my-reservations">예약 조회·취소</Link>
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
