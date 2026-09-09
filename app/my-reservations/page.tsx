@@ -20,10 +20,14 @@ export default async function MyReservationsPage() {
     redirect("/login");
   }
 
+  // Only ACTIVE reservations are shown here -- a cancelled one must never
+  // reappear after a refresh or navigating away and back, so it's excluded
+  // at the query level rather than filtered client-side.
   const { data: reservations } = await supabase
     .from("reservations")
-    .select("reservation_number, reservation_date, start_time, status, participant_count, created_at, cancelled_at")
+    .select("reservation_number, reservation_date, start_time, participant_count")
     .eq("user_id", user.id)
+    .eq("status", "active")
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 

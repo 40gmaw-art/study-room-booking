@@ -3,16 +3,16 @@
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cancelReservationAction } from "@/lib/booking-actions";
-import { formatTimeRange, getStatusLabel, isPastTimeSlot, TIME_SLOTS } from "@/lib/booking";
+import { formatTimeRange, isPastTimeSlot, TIME_SLOTS } from "@/lib/booking";
 
+// Only ACTIVE reservations are ever passed in (see app/my-reservations/page.tsx),
+// so there's no status/cancelled_at to track here -- a cancelled reservation
+// is removed from this list entirely rather than shown in a "취소됨" state.
 export type MyReservationRow = {
   reservation_number: string;
   reservation_date: string;
   start_time: string;
-  status: string;
   participant_count: number;
-  created_at: string;
-  cancelled_at: string | null;
 };
 
 type CancelState = { success: boolean; message: string; reservationNumber?: string };
@@ -37,13 +37,11 @@ export function MyReservationsList({ initialReservations }: { initialReservation
 
     if (cancelState.success && cancelState.reservationNumber) {
       const cancelledNumber = cancelState.reservationNumber;
-      setReservations((prev) =>
-        prev.map((row) =>
-          row.reservation_number === cancelledNumber
-            ? { ...row, status: "cancelled", cancelled_at: row.cancelled_at ?? new Date().toISOString() }
-            : row,
-        ),
-      );
+      // The cancelled reservation is no longer active, so it's removed from
+      // this list immediately -- matching what a re-fetch (refresh, or
+      // navigating away and back) would show, since the page query only
+      // ever selects status='active' rows.
+      setReservations((prev) => prev.filter((row) => row.reservation_number !== cancelledNumber));
       setCancelTarget(null);
     }
 
@@ -66,31 +64,18 @@ export function MyReservationsList({ initialReservations }: { initialReservation
         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">예약 내역이 없습니다.</div>
       ) : (
         reservations.map((reservation) => {
-          const isActive = reservation.status !== "cancelled";
           // Cancellable only while the slot hasn't started yet -- reuses the
           // same date+time judgment the booking page uses to gray out past
           // slots, so "already started" means the same thing everywhere.
           const hasStarted = isPastTimeSlot(reservation.reservation_date, reservation.start_time);
-          const canCancel = isActive && !hasStarted;
           return (
             <div key={reservation.reservation_number} className="rounded-2xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-semibold text-[#4B3B71]">{formatSlotTime(reservation.start_time)}</p>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    isActive ? "bg-[#f5efff] text-[#4B3B71]" : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {getStatusLabel(reservation.status)}
-                </span>
-              </div>
+              <p className="font-semibold text-[#4B3B71]">{formatSlotTime(reservation.start_time)}</p>
               <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                 <div>날짜: {reservation.reservation_date}</div>
                 <div>예약 인원: {reservation.participant_count}명</div>
-                <div>생성일: {reservation.created_at}</div>
-                <div>취소일: {reservation.cancelled_at ?? "-"}</div>
               </div>
-              {canCancel ? (
+              {!hasStarted ? (
                 <div className="mt-3 flex justify-end">
                   <Button
                     type="button"
@@ -102,13 +87,13 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                     예약 취소
                   </Button>
                 </div>
-              ) : isActive && hasStarted ? (
+              ) : (
                 <div className="mt-3 flex justify-end">
                   <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
                     취소 불가 · 이미 이용 시간이 시작되었습니다
                   </span>
                 </div>
-              ) : null}
+              )}
             </div>
           );
         })
