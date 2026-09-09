@@ -159,7 +159,7 @@ export async function cancelReservationAction(prevState: unknown, formData: Form
   if (error || !data) {
     return {
       success: false,
-      message: "예약 취소에 실패했습니다. 예약번호를 다시 확인해 주세요.",
+      message: describeReservationRpcError(error),
     };
   }
 

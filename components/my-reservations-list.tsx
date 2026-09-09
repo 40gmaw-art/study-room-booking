@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cancelReservationAction } from "@/lib/booking-actions";
-import { formatTimeRange, getStatusLabel, TIME_SLOTS } from "@/lib/booking";
+import { formatTimeRange, getStatusLabel, isPastTimeSlot, TIME_SLOTS } from "@/lib/booking";
 
 export type MyReservationRow = {
   reservation_number: string;
@@ -67,6 +67,11 @@ export function MyReservationsList({ initialReservations }: { initialReservation
       ) : (
         reservations.map((reservation) => {
           const isActive = reservation.status !== "cancelled";
+          // Cancellable only while the slot hasn't started yet -- reuses the
+          // same date+time judgment the booking page uses to gray out past
+          // slots, so "already started" means the same thing everywhere.
+          const hasStarted = isPastTimeSlot(reservation.reservation_date, reservation.start_time);
+          const canCancel = isActive && !hasStarted;
           return (
             <div key={reservation.reservation_number} className="rounded-2xl border border-slate-200 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -85,7 +90,7 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                 <div>생성일: {reservation.created_at}</div>
                 <div>취소일: {reservation.cancelled_at ?? "-"}</div>
               </div>
-              {isActive ? (
+              {canCancel ? (
                 <div className="mt-3 flex justify-end">
                   <Button
                     type="button"
@@ -96,6 +101,12 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                   >
                     예약 취소
                   </Button>
+                </div>
+              ) : isActive && hasStarted ? (
+                <div className="mt-3 flex justify-end">
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                    취소 불가 · 이미 이용 시간이 시작되었습니다
+                  </span>
                 </div>
               ) : null}
             </div>

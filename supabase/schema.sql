@@ -380,6 +380,7 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_reservation public.reservations%rowtype;
+  v_now_seoul timestamp := (now() at time zone 'Asia/Seoul');
 begin
   if v_user_id is null then
     raise exception '로그인이 필요합니다.' using errcode = '42501';
@@ -400,6 +401,17 @@ begin
 
   if v_reservation.user_id <> v_user_id and not public.is_admin_user() then
     raise exception '본인의 예약만 취소할 수 있습니다.' using errcode = '42501';
+  end if;
+
+  -- Cancellable only while the slot's START time has not yet arrived (its
+  -- own reservation_date + start_time, not "today" in general -- a past
+  -- DATE is caught by the same comparison since it's always <= now).
+  -- Otherwise cancelling an already-started slot would free up its hour in
+  -- the daily 4-hour budget after the student already used it, letting the
+  -- 4-hour cap be bypassed. Admins are exempt, matching the ownership check
+  -- just above.
+  if (v_reservation.reservation_date + v_reservation.start_time) <= v_now_seoul and not public.is_admin_user() then
+    raise exception '이미 이용이 시작된 예약은 취소할 수 없습니다.' using errcode = '22023';
   end if;
 
   update public.reservations
