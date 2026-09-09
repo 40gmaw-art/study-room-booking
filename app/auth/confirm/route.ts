@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { type NextRequest } from "next/server";
 
@@ -17,6 +18,11 @@ export async function GET(request: NextRequest) {
       token_hash,
     });
     if (!error) {
+      // Another session-establishing entry point that needs the same
+      // router-cache bust as verifyStudentOtp/signInAdmin/signOutUser --
+      // otherwise a login completing via this magic-link-style route could
+      // still land on a stale cached "/" rendered under a prior session.
+      revalidatePath("/", "layout");
       // redirect user to specified redirect URL or root of app
       redirect(next);
     } else {
