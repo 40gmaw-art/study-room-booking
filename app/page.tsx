@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogoutButton } from "@/components/logout-button";
 import { MainHeroImage } from "@/components/main-hero-image";
+import { StudyRoomLocationModal } from "@/components/study-room-location-modal";
 import { createClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/admin-session";
 
@@ -181,6 +182,9 @@ export default async function Home() {
                     <Link href="/my-reservations">예약 조회·취소</Link>
                   </Button>
                 ) : null}
+                {/* Shown for guest and student alike; admin is already
+                    excluded by the outer !isAdmin check above. */}
+                <StudyRoomLocationModal />
               </div>
             ) : null}
 
