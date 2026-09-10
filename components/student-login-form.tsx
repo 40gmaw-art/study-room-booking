@@ -7,9 +7,28 @@ import { Label } from "@/components/ui/label";
 import { requestStudentOtp, verifyStudentOtp } from "@/lib/auth-actions";
 
 const OTP_LENGTH = 6;
+const STUDENT_NUMBER_LENGTH = 9;
+const GACHON_EMAIL_DOMAIN = "gachon.ac.kr";
 
 const initialRequestState = { success: false as boolean, message: "", email: "" };
 const initialVerifyState = { success: false as boolean, message: "" };
+
+// Mirrors the studentNumber check in lib/auth-actions.ts's studentProfileSchema
+// (same two distinct messages, same priority) so the field can show an inline
+// hint before the user even submits -- the server-side check there stays the
+// authoritative one regardless of what this does.
+function getStudentNumberError(value: string): string | null {
+  if (!value) {
+    return null;
+  }
+  if (!/^\d+$/.test(value)) {
+    return "학번은 숫자만 입력해주세요.";
+  }
+  if (value.length !== STUDENT_NUMBER_LENGTH) {
+    return "학번은 9자리 숫자로 입력해주세요.";
+  }
+  return null;
+}
 
 function emptyOtp() {
   return Array<string>(OTP_LENGTH).fill("");
@@ -24,6 +43,7 @@ export function StudentLoginForm() {
   const [verifyState, verifyAction, isVerifying] = useActionState(verifyStudentOtp, initialVerifyState);
 
   const otp = otpDigits.join("");
+  const studentNumberError = getStudentNumberError(form.studentNumber);
 
   useEffect(() => {
     if (requestState.success) {
@@ -44,6 +64,18 @@ export function StudentLoginForm() {
     if (char && index < OTP_LENGTH - 1) {
       otpRefs.current[index + 1]?.focus();
     }
+  }
+
+  // Auto-completes the domain the instant the user types "@": "202531173@"
+  // becomes "202531173@gachon.ac.kr" immediately. Only triggers when the
+  // value ends with a bare "@" (i.e. right after typing it), so pasting or
+  // typing out a full address like "student@gachon.ac.kr" -- which never
+  // itself ends in a lone "@" -- passes through untouched, and the domain
+  // can never get appended twice.
+  function handleEmailChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value;
+    const next = raw.endsWith("@") ? `${raw}${GACHON_EMAIL_DOMAIN}` : raw;
+    setForm((prev) => ({ ...prev, email: next }));
   }
 
   function handleOtpKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
@@ -117,9 +149,12 @@ export function StudentLoginForm() {
               name="studentNumber"
               placeholder="202600000"
               required
+              inputMode="numeric"
+              maxLength={STUDENT_NUMBER_LENGTH}
               value={form.studentNumber}
               onChange={(event) => setForm((prev) => ({ ...prev, studentNumber: event.target.value }))}
             />
+            {studentNumberError ? <p className="text-xs font-semibold text-red-600">{studentNumberError}</p> : null}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="email">가천대학교 이메일</Label>
@@ -130,7 +165,7 @@ export function StudentLoginForm() {
               placeholder="student@gachon.ac.kr"
               required
               value={form.email}
-              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+              onChange={handleEmailChange}
             />
           </div>
 

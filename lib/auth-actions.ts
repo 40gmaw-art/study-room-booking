@@ -11,7 +11,23 @@ import { clearAdminSession, createAdminSession } from "@/lib/admin-session";
 const studentProfileSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력해 주세요."),
   department: z.string().trim().min(1, "학과를 입력해 주세요."),
-  studentNumber: z.string().trim().min(1, "학번을 입력해 주세요."),
+  // Distinguishes "contains a non-digit character" from "digits only but not
+  // exactly 9 of them" -- superRefine (rather than chained .refine calls) so
+  // only ONE of these issues is ever raised for a given value, matching
+  // exactly one of the two required messages instead of both firing at once.
+  studentNumber: z
+    .string()
+    .trim()
+    .min(1, "학번을 입력해 주세요.")
+    .superRefine((value, ctx) => {
+      if (!/^\d+$/.test(value)) {
+        ctx.addIssue({ code: "custom", message: "학번은 숫자만 입력해주세요." });
+        return;
+      }
+      if (value.length !== 9) {
+        ctx.addIssue({ code: "custom", message: "학번은 9자리 숫자로 입력해주세요." });
+      }
+    }),
   email: z.string().trim().toLowerCase().email("올바른 이메일 형식이 아닙니다.").refine(isGachonEmail, {
     message: "@gachon.ac.kr 이메일만 사용할 수 있습니다.",
   }),
