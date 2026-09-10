@@ -51,13 +51,27 @@ export function StudyRoomLocationModal() {
 
       {isOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-label="스터디룸 위치 안내"
           onClick={() => setIsOpen(false)}
         >
-          <div className="relative max-h-[90vh] max-w-full" onClick={(event) => event.stopPropagation()}>
+          {/*
+            Outer box: the box's own w/h formula (min(vw), min(dvh)) already
+            comes out portrait-shaped (narrow x tall) on a phone held
+            upright and landscape-shaped (wide x short) once the phone is
+            turned sideways or on a PC window -- no separate breakpoint
+            needed for ITS size, only for whether the image inside gets
+            rotated. dvh (not vh) reflects the actually-visible mobile
+            viewport (accounts for the browser address bar).
+          */}
+          <div
+            className="relative h-[min(80dvh,900px)] w-[min(92vw,1400px)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* Direct child of the outer box (not the rotated layer below),
+                so it's never itself rotated or displaced. */}
             <button
               type="button"
               onClick={() => setIsOpen(false)}
@@ -68,21 +82,51 @@ export function StudyRoomLocationModal() {
             </button>
 
             {hasImageError ? (
-              <div className="flex h-56 w-72 max-w-full flex-col items-center justify-center gap-1 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-xl">
+              <div className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-xl">
                 <p className="font-semibold text-[#4B3B71]">위치 안내 이미지를 준비 중입니다.</p>
                 <p>잠시 후 다시 확인해 주세요.</p>
               </div>
             ) : (
-              // Unknown intrinsic size ahead of time; a plain img lets CSS
-              // scale it to fit the viewport without distorting the aspect
-              // ratio (next/image would need explicit width/height or fill).
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={IMAGE_SRC}
-                alt="스터디룸 위치 안내"
-                onError={() => setHasImageError(true)}
-                className="max-h-[90vh] w-auto max-w-full rounded-2xl object-contain shadow-xl"
-              />
+              // Safety-clip layer: exactly overlays the outer box and hosts
+              // the rounded-corner/shadow look, independent of whatever the
+              // rotated layer inside it does.
+              <div className="absolute inset-0 overflow-hidden rounded-2xl shadow-xl">
+                {/*
+                  The image is landscape-shaped source art. Below "md" AND
+                  while the viewport is portrait (a phone held upright) it's
+                  rotated 90deg so it uses the box's larger (vertical) extent
+                  instead of being squeezed to the narrow width. Its own
+                  pre-rotation box is given the SWAPPED w/h of the outer box
+                  above, so after the rotation its visual footprint exactly
+                  matches the outer box again. Centered via
+                  left/top-1/2 + -translate-1/2 (not flex), so an
+                  intentionally-oversized pre-rotation box can't get
+                  flex-shrunk before the rotation is applied.
+
+                  At "md" and up, and on a phone turned sideways
+                  (landscape), the rotation is switched off and the layer
+                  simply fills the box normally -- this covers PC (always,
+                  regardless of window shape) and a rotated phone, both of
+                  which already have enough horizontal room to show the
+                  landscape image right-side-up and large.
+                */}
+                <div
+                  className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 rotate-0 max-md:portrait:h-[min(92vw,1400px)] max-md:portrait:w-[min(80dvh,900px)] max-md:portrait:rotate-90"
+                >
+                  {/* Unknown intrinsic size ahead of time; object-contain
+                      (not next/image, which would need an explicit
+                      width/height or fill) both preserves the aspect ratio
+                      and upscales a small source image to fill the box
+                      above, and (per requirement) never crops it. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={IMAGE_SRC}
+                    alt="스터디룸 위치 안내"
+                    onError={() => setHasImageError(true)}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>
