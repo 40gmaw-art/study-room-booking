@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getMonthGridWeeks, getTodayDateKey, isBookingDateAllowed } from "@/lib/booking";
+import { getDateBadge, getMonthGridWeeks, getTodayDateKey, isBookingDateAllowed } from "@/lib/booking";
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -90,6 +90,7 @@ export function DateCalendar({
             const enabled = isBookingDateAllowed(cell.dateKey);
             const isSelected = cell.dateKey === selectedDate;
             const isToday = cell.dateKey === todayKey;
+            const badge = getDateBadge(cell.dateKey);
 
             return (
               <button
@@ -98,15 +99,42 @@ export function DateCalendar({
                 onClick={() => enabled && onSelectDate(cell.dateKey)}
                 disabled={!enabled}
                 aria-pressed={isSelected}
-                className={`aspect-square rounded-xl text-base font-semibold transition-colors md:text-lg ${
+                className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl transition-colors ${
                   isSelected
                     ? "bg-[#4B3B71] text-white"
                     : enabled
-                      ? "bg-white text-slate-700 hover:bg-[#f5efff]"
-                      : "cursor-not-allowed bg-slate-50 text-slate-300"
+                      ? "bg-white hover:bg-[#f5efff]"
+                      : "cursor-not-allowed bg-slate-50"
                 } ${isToday && !isSelected ? "ring-1 ring-inset ring-[#4B3B71]/40" : ""}`}
               >
-                {cell.day}
+                <span
+                  className={`text-base font-semibold leading-none md:text-lg ${
+                    isSelected
+                      ? "text-white"
+                      : badge?.variant === "holiday"
+                        ? "text-red-600"
+                        : enabled
+                          ? "text-slate-700"
+                          : "text-slate-300"
+                  }`}
+                >
+                  {cell.day}
+                </span>
+                {badge ? (
+                  <span
+                    className={`text-[8px] font-semibold leading-none sm:text-[9px] ${
+                      badge.variant === "holiday"
+                        ? isSelected
+                          ? "text-red-200"
+                          : "text-red-600"
+                        : isSelected
+                          ? "text-violet-200"
+                          : "text-violet-400"
+                    }`}
+                  >
+                    {badge.label}
+                  </span>
+                ) : null}
               </button>
             );
           }),

@@ -122,7 +122,7 @@ export function getBookingDateOptions(): BookingDateOption[] {
     const isWeekend = isoWeekday >= 6;
     const isBeforeToday = current < today;
     const isAfterAllowedRange = current > endDate;
-    const enabled = !isBeforeToday && !isWeekend && current <= endDate;
+    const enabled = !isBeforeToday && !isWeekend && current <= endDate && !(dateKey in BLOCKED_HOLIDAY_DATES);
 
     options.push({
       date: dateKey,
@@ -146,9 +146,59 @@ export function getDefaultBookingDate() {
   return getBookingDates()[0] ?? "";
 }
 
+// One-off date exceptions for 2026-10, layered on top of the normal
+// weekday/rolling-window rule above rather than replacing it:
+//   - BLOCKED_HOLIDAY_DATES: national holidays that fall on what would
+//     otherwise be a bookable weekday -- reservations are blocked outright,
+//     with an optional label to show on the calendar (null = no label, just
+//     unbookable). 10/5 is the substitute holiday for 개천절 (10/3, a
+//     Saturday), so both the actual holiday and its substitute matter here.
+//   - EXAM_PERIOD_DATES: mid-term exam week, display-only -- its weekday
+//     dates stay bookable under the existing weekday rule and its weekend
+//     dates stay blocked under the existing weekend rule; nothing about
+//     enabled/disabled changes for these dates.
+// Extend either directly for a future term; nothing else needs to change.
+export const BLOCKED_HOLIDAY_DATES: Record<string, string | null> = {
+  "2026-10-05": "개천절",
+  "2026-10-07": null,
+  "2026-10-09": "한글날",
+};
+
+export const EXAM_PERIOD_DATES = new Set([
+  "2026-10-20",
+  "2026-10-21",
+  "2026-10-22",
+  "2026-10-23",
+  "2026-10-24",
+  "2026-10-25",
+  "2026-10-26",
+]);
+
+export interface DateBadge {
+  label: string;
+  variant: "holiday" | "exam";
+}
+
+// Calendar display only -- never consulted for whether a date can be
+// booked (that's isBookingDateAllowed below).
+export function getDateBadge(dateKey: string): DateBadge | null {
+  const holidayLabel = BLOCKED_HOLIDAY_DATES[dateKey];
+  if (holidayLabel) {
+    return { label: holidayLabel, variant: "holiday" };
+  }
+  if (EXAM_PERIOD_DATES.has(dateKey)) {
+    return { label: "중간고사", variant: "exam" };
+  }
+  return null;
+}
+
 export function isBookingDateAllowed(dateKey: string) {
   const match = /^\d{4}-\d{2}-\d{2}$/.exec(dateKey);
   if (!match) {
+    return false;
+  }
+
+  if (dateKey in BLOCKED_HOLIDAY_DATES) {
     return false;
   }
 
@@ -167,6 +217,10 @@ export function isBookingDateAllowed(dateKey: string) {
 export function getBookingDateValidation(dateKey: string) {
   if (!dateKey) {
     return { allowed: false, message: "예약 날짜를 선택해 주세요." };
+  }
+
+  if (dateKey in BLOCKED_HOLIDAY_DATES) {
+    return { allowed: false, message: "공휴일은 예약할 수 없습니다." };
   }
 
   if (!isBookingDateAllowed(dateKey)) {

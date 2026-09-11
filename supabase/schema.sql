@@ -190,6 +190,16 @@ begin
   if extract(isodow from p_reservation_date)::int not between 1 and 5 then
     raise exception '평일만 예약할 수 있습니다.' using errcode = '22023';
   end if;
+
+  -- 2026-10 holiday block: 10/3 개천절's substitute holiday (10/5), and
+  -- 10/7, 10/9 (한글날) -- otherwise-bookable weekdays that are blocked
+  -- outright. Mirrors lib/booking.ts's BLOCKED_HOLIDAY_DATES so the two
+  -- never drift; this is the authoritative check since it runs inside the
+  -- same security definer function every reservation-creating RPC calls,
+  -- independent of any client-side date picker.
+  if p_reservation_date in ('2026-10-05', '2026-10-07', '2026-10-09') then
+    raise exception '공휴일은 예약할 수 없습니다.' using errcode = '22023';
+  end if;
 end;
 $$;
 
