@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const IMAGE_SRC = "/images/study-room-location.jpg";
+const IMAGE_SRC = "/images/study-room-location.png";
 
 // Self-contained trigger + modal: the button that opens it lives in the same
 // flex row as the other home-page CTAs (see app/page.tsx), and the modal
 // itself is fixed-position so where this sits in the DOM doesn't matter.
 // Referencing the image by plain string path (not a static import) means
 // the build never fails even before the file exists at
-// public/images/study-room-location.jpg -- only a broken <img> at runtime
+// public/images/study-room-location.png -- only a broken <img> at runtime
 // until it's added, handled below via onError.
 export function StudyRoomLocationModal() {
   const [isOpen, setIsOpen] = useState(false);
