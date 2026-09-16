@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/logout-button";
 import { AdminReservationManager } from "@/components/admin-reservation-manager";
 import { createClient } from "@/lib/supabase/server";
-import { getBookingDateOptions } from "@/lib/booking";
+import { getBookingDateOptions, getTodayDateKey } from "@/lib/booking";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -11,15 +11,17 @@ export const fetchCache = "force-no-store";
 
 export default async function AdminReservationsPage() {
   const supabase = await createClient();
+  const todayKey = getTodayDateKey();
 
-  // Only active reservations are shown here; cancelled ones stay in the
-  // table untouched (existing soft-cancel data/behavior is not affected).
+  // Only active reservations from today onward are shown here; older and
+  // cancelled rows stay in the table untouched.
   const { data: reservations } = await supabase
     .from("reservations")
     .select(
       "id, reservation_number, reservation_date, start_time, name, department, student_number, status, participant_count, user_id, created_at",
     )
     .eq("status", "active")
+    .gte("reservation_date", todayKey)
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 
