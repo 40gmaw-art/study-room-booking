@@ -16,7 +16,7 @@ import {
   type AdminDeleteReservationGroupState,
   type AdminUpdateReservationGroupState,
 } from "@/lib/booking-actions";
-import { formatDateForDisplay, formatTimeRange, getStatusLabel, MAX_PARTICIPANTS, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
+import { formatDateForDisplay, formatTimeRange, getSeoulTimeKey, getStatusLabel, getTodayDateKey, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
 import {
   type AdminBookingGroup,
   type AdminReservationRow,
@@ -31,13 +31,35 @@ const initialCreateState: AdminCreateReservationState = { success: false, messag
 const initialGroupUpdateState: AdminUpdateReservationGroupState = { success: false, message: "" };
 const initialGroupDeleteState: AdminDeleteReservationGroupState = { success: false, message: "", reservationIds: [] };
 
+function getCreateStudentNumberError(value: string): string | null {
+  if (!value) {
+    return null;
+  }
+  if (!/^\d+$/.test(value)) {
+    return "학번은 숫자만 입력해주세요.";
+  }
+  if (value.length !== 9) {
+    return "학번은 9자리 숫자로 입력해주세요.";
+  }
+  return null;
+}
+
 export function AdminReservationManager({
   initialReservations,
   allowedDates,
+  initialTodayDate,
+  initialSeoulTime,
 }: {
   initialReservations: AdminReservationRow[];
   allowedDates: Array<{ date: string }>;
+  initialTodayDate: string;
+  initialSeoulTime: string;
 }) {
+  const initialCreateDate = allowedDates[0]?.date ?? "";
+  const initialStartSlot = TIME_SLOTS.find(
+    (slot) => initialCreateDate !== initialTodayDate || slot.value >= initialSeoulTime,
+  );
+  const [currentSeoulTime, setCurrentSeoulTime] = useState(initialSeoulTime);
   const router = useRouter();
   const [reservations, setReservations] = useState(initialReservations);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,25 +82,56 @@ export function AdminReservationManager({
     initialGroupDeleteState,
   );
 
-  const [createDate, setCreateDate] = useState(allowedDates[0]?.date ?? "");
-  const [createStartTime, setCreateStartTime] = useState<string>(TIME_SLOTS[0].value);
-  const [createEndTime, setCreateEndTime] = useState<string>(TIME_SLOTS[1].value);
+  const [createDate, setCreateDate] = useState(initialCreateDate);
+  const [createStartTime, setCreateStartTime] = useState<string>(initialStartSlot?.value ?? "");
+  const [createEndTime, setCreateEndTime] = useState<string>(initialStartSlot?.end ?? "");
   const [createName, setCreateName] = useState("");
   const [createDepartment, setCreateDepartment] = useState("");
   const [createStudentNumber, setCreateStudentNumber] = useState("");
-  const [createParticipantCount, setCreateParticipantCount] = useState("1");
+  const [createParticipantCount, setCreateParticipantCount] = useState(String(MIN_PARTICIPANTS));
+  const createStudentNumberError = getCreateStudentNumberError(createStudentNumber);
   const [createState, createAction, isCreating] = useActionState(adminCreateReservationAction, initialCreateState);
 
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentSeoulTime(getSeoulTimeKey()), 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   const grouped = useMemo(() => groupReservationsIntoBookings(reservations), [reservations]);
+  const todayDateKey = getTodayDateKey();
+  const availableCreateStartSlots = useMemo(
+    () => TIME_SLOTS.filter((slot) => createDate !== todayDateKey || slot.value >= currentSeoulTime),
+    [createDate, currentSeoulTime, todayDateKey],
+  );
   const createStartIndex = TIME_SLOTS.findIndex((slot) => slot.value === createStartTime);
-  const createEndIndex = TIME_SLOTS.findIndex((slot) => slot.value === createEndTime);
-  const createSelectedSlots = TIME_SLOTS.slice(createStartIndex, createEndIndex);
+  const createEndIndex = TIME_SLOTS.findIndex((slot) => slot.end === createEndTime);
+  const createEndOptions = createStartIndex < 0
+    ? []
+    : TIME_SLOTS.slice(createStartIndex, Math.min(createStartIndex + MAX_TIME_SLOTS_PER_RESERVATION, TIME_SLOTS.length));
+  const createSelectedSlots =
+    createStartIndex >= 0 && createEndIndex >= createStartIndex
+      ? TIME_SLOTS.slice(createStartIndex, createEndIndex + 1)
+      : [];
   const createHasConflict = reservations.some(
     (reservation) =>
       reservation.status === "active" &&
       reservation.reservation_date === createDate &&
       createSelectedSlots.some((slot) => slot.value === reservation.start_time),
   );
+
+  useEffect(() => {
+    const firstAvailableSlot = availableCreateStartSlots[0];
+    if (!firstAvailableSlot) {
+      setCreateStartTime("");
+      setCreateEndTime("");
+      return;
+    }
+
+    if (!availableCreateStartSlots.some((slot) => slot.value === createStartTime)) {
+      setCreateStartTime(firstAvailableSlot.value);
+      setCreateEndTime(firstAvailableSlot.end);
+    }
+  }, [availableCreateStartSlots, createStartTime]);
 
   useEffect(() => {
     if (!createState.message) {
@@ -90,7 +143,7 @@ export function AdminReservationManager({
       setCreateName("");
       setCreateDepartment("");
       setCreateStudentNumber("");
-      setCreateParticipantCount("1");
+      setCreateParticipantCount(String(MIN_PARTICIPANTS));
       // Date/time selection is kept as-is so the admin can add another
       // reservation to the same slot without re-selecting it.
     }
@@ -188,7 +241,15 @@ export function AdminReservationManager({
                 name="reservationDate"
                 className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={createDate}
-                onChange={(event) => setCreateDate(event.target.value)}
+                onChange={(event) => {
+                  const nextDate = event.target.value;
+                  const firstAvailableSlot = TIME_SLOTS.find(
+                    (slot) => nextDate !== todayDateKey || slot.value >= currentSeoulTime,
+                  );
+                  setCreateDate(nextDate);
+                  setCreateStartTime(firstAvailableSlot?.value ?? "");
+                  setCreateEndTime(firstAvailableSlot?.end ?? "");
+                }}
               >
                 {allowedDates.map((option) => (
                   <option key={option.date} value={option.date}>
@@ -208,10 +269,13 @@ export function AdminReservationManager({
                     const nextStart = event.target.value;
                     const nextStartIndex = TIME_SLOTS.findIndex((slot) => slot.value === nextStart);
                     setCreateStartTime(nextStart);
-                    setCreateEndTime(TIME_SLOTS[Math.min(nextStartIndex + 1, TIME_SLOTS.length - 1)].value);
+                    setCreateEndTime(TIME_SLOTS[nextStartIndex]?.end ?? "");
                   }}
                 >
-                  {TIME_SLOTS.slice(0, -1).map((slot) => (
+                  {availableCreateStartSlots.length === 0 ? (
+                    <option value="" disabled>오늘 예약 가능한 시간대가 없습니다.</option>
+                  ) : null}
+                  {availableCreateStartSlots.map((slot) => (
                     <option key={slot.value} value={slot.value}>
                       {slot.start}시작
                     </option>
@@ -224,8 +288,11 @@ export function AdminReservationManager({
                   value={createEndTime}
                   onChange={(event) => setCreateEndTime(event.target.value)}
                 >
-                  {TIME_SLOTS.slice(createStartIndex + 1, Math.min(createStartIndex + 5, TIME_SLOTS.length)).map((slot) => (
-                    <option key={slot.value} value={slot.value}>
+                  {createEndOptions.length === 0 ? (
+                    <option value="" disabled>종료 시간 없음</option>
+                  ) : null}
+                  {createEndOptions.map((slot) => (
+                    <option key={slot.end} value={slot.end}>
                       {slot.end}종료
                     </option>
                   ))}
@@ -235,7 +302,11 @@ export function AdminReservationManager({
                 <input key={slot.value} type="hidden" name="startTimes" value={slot.value} />
               ))}
               <p className={`text-xs font-semibold ${createHasConflict ? "text-red-600" : "text-[#4B3B71]"}`}>
-                {createSelectedSlots.length > 0 ? formatTimeRange({ start: createSelectedSlots[0].start, end: createSelectedSlots.at(-1)!.end }) : "시간대를 선택해 주세요."}
+                {createSelectedSlots.length > 0
+                  ? formatTimeRange({ start: createSelectedSlots[0].start, end: createSelectedSlots.at(-1)!.end })
+                  : availableCreateStartSlots.length === 0
+                    ? "오늘 예약 가능한 시간대가 없습니다."
+                    : "시간대를 선택해 주세요."}
                 {createHasConflict ? " · 이미 예약된 시간대가 포함되어 있습니다." : ""}
               </p>
             </div>
@@ -265,9 +336,13 @@ export function AdminReservationManager({
                 id="studentNumber"
                 name="studentNumber"
                 placeholder="학번"
+                inputMode="numeric"
                 value={createStudentNumber}
                 onChange={(event) => setCreateStudentNumber(event.target.value)}
               />
+              {createStudentNumberError ? (
+                <p className="text-xs font-semibold text-red-600">{createStudentNumberError}</p>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="participantCount">예약 인원</Label>
@@ -287,7 +362,7 @@ export function AdminReservationManager({
               <Button
                 type="submit"
                 className="h-10 rounded-full bg-[#4B3B71] hover:bg-[#3f315d]"
-                disabled={isCreating || createSelectedSlots.length < 1 || createHasConflict}
+                disabled={isCreating || createSelectedSlots.length < 1 || createHasConflict || Boolean(createStudentNumberError)}
               >
                 {isCreating ? "추가 중..." : "예약 추가"}
               </Button>

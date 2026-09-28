@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { formatTimeRange, getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
+import { formatTimeRange, getBookingDateValidation, getBookingDates, getSeoulTimeKey, getTodayDateKey, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
 import { verifyAdminSession } from "@/lib/admin-session";
 import { formatFullKoreanDate, type AdminReservationRow } from "@/lib/admin-reservations";
 
@@ -326,6 +326,10 @@ export async function adminCreateReservationAction(
     .sort((a, b) => a - b);
   if (selectedSlots.some((index) => index < 0) || selectedSlots.some((index, position) => position > 0 && index !== selectedSlots[position - 1] + 1)) {
     return { ...empty, message: "예약 시간대는 연속해서 선택해 주세요." };
+  }
+
+  if (date === getTodayDateKey() && times.some((time) => time < getSeoulTimeKey())) {
+    return { ...empty, message: "이미 시작했거나 지난 시간대는 예약할 수 없습니다." };
   }
 
   if (participantCount === null) {

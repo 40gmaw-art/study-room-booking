@@ -230,6 +230,17 @@ export function getBookingDateValidation(dateKey: string) {
   return { allowed: true, message: "" };
 }
 
+export function getSeoulTimeKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.hour}:${map.minute}:00`;
+}
+
 // A slot only counts as "past" when dateKey is TODAY in Asia/Seoul and its
 // start time has already been reached -- a future date's slots are never
 // past, no matter what the current wall-clock time is. Uses the same

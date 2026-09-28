@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/logout-button";
 import { AdminReservationManager } from "@/components/admin-reservation-manager";
 import { createClient } from "@/lib/supabase/server";
-import { getBookingDateOptions, getTodayDateKey } from "@/lib/booking";
+import { getBookingDateOptions, getSeoulTimeKey, getTodayDateKey } from "@/lib/booking";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -46,7 +46,12 @@ export default async function AdminReservationsPage() {
           </div>
         </header>
 
-        <AdminReservationManager initialReservations={reservations ?? []} allowedDates={allowedDates} />
+        <AdminReservationManager
+          initialReservations={reservations ?? []}
+          allowedDates={allowedDates}
+          initialTodayDate={todayKey}
+          initialSeoulTime={getSeoulTimeKey()}
+        />
       </div>
     </main>
   );
