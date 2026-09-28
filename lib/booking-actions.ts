@@ -2,9 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
+import { formatTimeRange, getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
 import { verifyAdminSession } from "@/lib/admin-session";
-import { formatFullKoreanDate, slotLabelFor, type AdminReservationRow } from "@/lib/admin-reservations";
+import { formatFullKoreanDate, type AdminReservationRow } from "@/lib/admin-reservations";
 
 // Shared guard for every admin-only write action below. Re-checks the
 // CURRENT session's profiles.role AND the signed admin-mode session cookie
@@ -270,7 +270,7 @@ export async function getMyReservations() {
 export type AdminCreateReservationState = {
   success: boolean;
   message: string;
-  reservation: AdminReservationRow | null;
+  reservations: AdminReservationRow[];
 };
 
 export async function adminCreateReservationAction(
@@ -281,13 +281,21 @@ export async function adminCreateReservationAction(
   await requireAdminOrRedirect(supabase);
 
   const date = String(formData.get("reservationDate") || "").trim();
-  const slot = String(formData.get("startTime") || "").trim();
+  const times = Array.from(
+    new Set(
+      formData
+        .getAll("startTimes")
+        .flatMap((value) => String(value).split(","))
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
   const name = String(formData.get("name") || "").trim();
   const department = String(formData.get("department") || "").trim();
   const studentNumber = String(formData.get("studentNumber") || "").trim();
   const participantCount = parseParticipantCount(formData.get("participantCount"));
 
-  const empty: AdminCreateReservationState = { success: false, message: "", reservation: null };
+  const empty: AdminCreateReservationState = { success: false, message: "", reservations: [] };
 
   if (!name) {
     return { ...empty, message: "이름을 입력해 주세요." };
@@ -306,17 +314,24 @@ export async function adminCreateReservationAction(
     return { ...empty, message: dateValidation.message };
   }
 
-  if (!TIME_SLOTS.some((timeSlot) => timeSlot.value === slot)) {
-    return { ...empty, message: "유효하지 않은 시간대입니다." };
+  if (times.length < 1 || times.length > MAX_TIME_SLOTS_PER_RESERVATION) {
+    return { ...empty, message: `한 번의 예약은 1시간 이상 ${MAX_TIME_SLOTS_PER_RESERVATION}시간 이하로 선택해 주세요.` };
+  }
+
+  const selectedSlots = times
+    .map((time) => TIME_SLOTS.findIndex((timeSlot) => timeSlot.value === time))
+    .sort((a, b) => a - b);
+  if (selectedSlots.some((index) => index < 0) || selectedSlots.some((index, position) => position > 0 && index !== selectedSlots[position - 1] + 1)) {
+    return { ...empty, message: "예약 시간대는 연속해서 선택해 주세요." };
   }
 
   if (participantCount === null) {
     return { ...empty, message: `예약 인원은 ${MIN_PARTICIPANTS}명 이상 ${MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.` };
   }
 
-  const { data, error } = await supabase.rpc("create_reservation", {
+  const { data, error } = await supabase.rpc("create_reservations_admin_bulk", {
     p_reservation_date: date,
-    p_start_time: slot,
+    p_start_times: times,
     p_name: name,
     p_department: department,
     p_student_number: studentNumber,
@@ -327,12 +342,14 @@ export async function adminCreateReservationAction(
     return { ...empty, message: describeReservationRpcError(error) };
   }
 
-  const reservation = data as AdminReservationRow;
+  const reservations = data as AdminReservationRow[];
+  const firstSlot = TIME_SLOTS[selectedSlots[0]];
+  const lastSlot = TIME_SLOTS[selectedSlots[selectedSlots.length - 1]];
 
   return {
     success: true,
-    message: `${name}님의 ${formatFullKoreanDate(date)} ${slotLabelFor(slot)} 예약을 ${participantCount}명으로 추가했습니다.`,
-    reservation,
+    message: `${name}님의 ${formatFullKoreanDate(date)} ${formatTimeRange({ start: firstSlot.start, end: lastSlot.end })} 예약을 ${participantCount}명으로 추가했습니다.`,
+    reservations,
   };
 }
 

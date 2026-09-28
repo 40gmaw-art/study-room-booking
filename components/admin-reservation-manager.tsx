@@ -16,7 +16,7 @@ import {
   type AdminDeleteReservationGroupState,
   type AdminUpdateReservationGroupState,
 } from "@/lib/booking-actions";
-import { formatDateForDisplay, getStatusLabel, MAX_PARTICIPANTS, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
+import { formatDateForDisplay, formatTimeRange, getStatusLabel, MAX_PARTICIPANTS, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
 import {
   type AdminBookingGroup,
   type AdminReservationRow,
@@ -27,7 +27,7 @@ import {
 } from "@/lib/admin-reservations";
 
 const initialDeleteState = { success: false as boolean, message: "", reservationId: "" };
-const initialCreateState: AdminCreateReservationState = { success: false, message: "", reservation: null };
+const initialCreateState: AdminCreateReservationState = { success: false, message: "", reservations: [] };
 const initialGroupUpdateState: AdminUpdateReservationGroupState = { success: false, message: "" };
 const initialGroupDeleteState: AdminDeleteReservationGroupState = { success: false, message: "", reservationIds: [] };
 
@@ -62,6 +62,7 @@ export function AdminReservationManager({
 
   const [createDate, setCreateDate] = useState(allowedDates[0]?.date ?? "");
   const [createStartTime, setCreateStartTime] = useState<string>(TIME_SLOTS[0].value);
+  const [createEndTime, setCreateEndTime] = useState<string>(TIME_SLOTS[1].value);
   const [createName, setCreateName] = useState("");
   const [createDepartment, setCreateDepartment] = useState("");
   const [createStudentNumber, setCreateStudentNumber] = useState("");
@@ -69,14 +70,23 @@ export function AdminReservationManager({
   const [createState, createAction, isCreating] = useActionState(adminCreateReservationAction, initialCreateState);
 
   const grouped = useMemo(() => groupReservationsIntoBookings(reservations), [reservations]);
+  const createStartIndex = TIME_SLOTS.findIndex((slot) => slot.value === createStartTime);
+  const createEndIndex = TIME_SLOTS.findIndex((slot) => slot.value === createEndTime);
+  const createSelectedSlots = TIME_SLOTS.slice(createStartIndex, createEndIndex);
+  const createHasConflict = reservations.some(
+    (reservation) =>
+      reservation.status === "active" &&
+      reservation.reservation_date === createDate &&
+      createSelectedSlots.some((slot) => slot.value === reservation.start_time),
+  );
 
   useEffect(() => {
     if (!createState.message) {
       return;
     }
 
-    if (createState.success && createState.reservation) {
-      setReservations((prev) => [...prev, createState.reservation as AdminReservationRow]);
+    if (createState.success && createState.reservations.length > 0) {
+      setReservations((prev) => [...prev, ...createState.reservations]);
       setCreateName("");
       setCreateDepartment("");
       setCreateStudentNumber("");
@@ -189,19 +199,45 @@ export function AdminReservationManager({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="startTime">시간대</Label>
-              <select
-                id="startTime"
-                name="startTime"
-                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                value={createStartTime}
-                onChange={(event) => setCreateStartTime(event.target.value)}
-              >
-                {TIME_SLOTS.map((slot) => (
-                  <option key={slot.value} value={slot.value}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  id="startTime"
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  value={createStartTime}
+                  onChange={(event) => {
+                    const nextStart = event.target.value;
+                    const nextStartIndex = TIME_SLOTS.findIndex((slot) => slot.value === nextStart);
+                    setCreateStartTime(nextStart);
+                    setCreateEndTime(TIME_SLOTS[Math.min(nextStartIndex + 1, TIME_SLOTS.length - 1)].value);
+                  }}
+                >
+                  {TIME_SLOTS.slice(0, -1).map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.start}시작
+                    </option>
+                  ))}
+                </select>
+                <select
+                  id="endTime"
+                  name="endTime"
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  value={createEndTime}
+                  onChange={(event) => setCreateEndTime(event.target.value)}
+                >
+                  {TIME_SLOTS.slice(createStartIndex + 1, Math.min(createStartIndex + 5, TIME_SLOTS.length)).map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.end}종료
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {createSelectedSlots.map((slot) => (
+                <input key={slot.value} type="hidden" name="startTimes" value={slot.value} />
+              ))}
+              <p className={`text-xs font-semibold ${createHasConflict ? "text-red-600" : "text-[#4B3B71]"}`}>
+                {createSelectedSlots.length > 0 ? formatTimeRange({ start: createSelectedSlots[0].start, end: createSelectedSlots.at(-1)!.end }) : "시간대를 선택해 주세요."}
+                {createHasConflict ? " · 이미 예약된 시간대가 포함되어 있습니다." : ""}
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="name">이름</Label>
@@ -251,7 +287,7 @@ export function AdminReservationManager({
               <Button
                 type="submit"
                 className="h-10 rounded-full bg-[#4B3B71] hover:bg-[#3f315d]"
-                disabled={isCreating}
+                disabled={isCreating || createSelectedSlots.length < 1 || createHasConflict}
               >
                 {isCreating ? "추가 중..." : "예약 추가"}
               </Button>
