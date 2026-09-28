@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { formatTimeRange, getBookingDateValidation, getBookingDates, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
 import { verifyAdminSession } from "@/lib/admin-session";
@@ -11,7 +12,7 @@ import { formatFullKoreanDate, type AdminReservationRow } from "@/lib/admin-rese
 // on every call (never trusts that the caller reached this action through an
 // admin-only page) so a non-admin, or an admin who never completed
 // /admin/login, is redirected away instead of writing data.
-async function requireAdminOrRedirect(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function requireAdminOrRedirect(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -34,6 +35,8 @@ async function requireAdminOrRedirect(supabase: Awaited<ReturnType<typeof create
   if (!hasAdminSession) {
     redirect("/admin/login");
   }
+
+  return user.id;
 }
 
 // Server actions never return raw Error/Response/Supabase-error objects to
@@ -278,7 +281,7 @@ export async function adminCreateReservationAction(
   formData: FormData,
 ): Promise<AdminCreateReservationState> {
   const supabase = await createClient();
-  await requireAdminOrRedirect(supabase);
+  const adminUserId = await requireAdminOrRedirect(supabase);
 
   const date = String(formData.get("reservationDate") || "").trim();
   const times = Array.from(
@@ -329,7 +332,21 @@ export async function adminCreateReservationAction(
     return { ...empty, message: `예약 인원은 ${MIN_PARTICIPANTS}명 이상 ${MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.` };
   }
 
-  const { data, error } = await supabase.rpc("create_reservations_admin_bulk", {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || session.user.id !== adminUserId) {
+    redirect("/admin/login");
+  }
+
+  const rpcClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+    },
+  );
+
+  const { data, error } = await rpcClient.rpc("create_reservations_admin_bulk", {
     p_reservation_date: date,
     p_start_times: times,
     p_name: name,
