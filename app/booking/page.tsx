@@ -18,7 +18,7 @@ export default async function BookingRoute() {
 
   const { data: profileData } = await supabase
     .from("profiles")
-    .select("name, department, student_number, email, role")
+    .select("name, department, student_number, phone_number, email, role")
     .eq("id", user.id)
     .single();
 

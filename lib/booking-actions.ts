@@ -54,6 +54,11 @@ function describeReservationRpcError(error: { message?: string; code?: string } 
   }
 
   if (message) {
+    const slotConflict = /^(\d{2}:\d{2})~\d{2}:\d{2}(?= 시간대는 이미 다른 )/.exec(message);
+    const slot = slotConflict ? TIME_SLOTS.find((timeSlot) => timeSlot.start === slotConflict[1]) : undefined;
+    if (slotConflict && slot) {
+      return message.replace(slotConflict[0], formatTimeRange(slot));
+    }
     return message;
   }
 
@@ -251,6 +256,7 @@ export async function getMyReservations() {
     .from("reservations")
     .select("*")
     .eq("user_id", userData.user.id)
+    .eq("created_by_admin", false)
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -458,8 +464,8 @@ export async function adminDeleteReservationAction(prevState: unknown, formData:
   return { success: true, message: "예약이 삭제되었습니다.", reservationId };
 }
 
-// Admin "예약 관리" screen displays consecutive same-booking 1-hour rows as
-// one merged time-range card (see lib/admin-reservations.ts
+// Admin "예약 관리" screen displays adjacent rows from one booking as a
+// merged time-range card (see lib/admin-reservations.ts
 // groupReservationsIntoBookings). Editing/deleting such a card must act on
 // every underlying row, not just one -- these two actions loop the SAME
 // per-row RPCs used by adminUpdateReservationAction/adminDeleteReservationAction

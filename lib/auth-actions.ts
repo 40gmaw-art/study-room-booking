@@ -28,6 +28,11 @@ const studentProfileSchema = z.object({
         ctx.addIssue({ code: "custom", message: "학번은 9자리 숫자로 입력해주세요." });
       }
     }),
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(1, "전화번호를 입력해 주세요.")
+    .regex(/^010-\d{4}-\d{4}$/, "전화번호는 010-0000-0000 형식으로 입력해 주세요."),
   email: z.string().trim().toLowerCase().email("올바른 이메일 형식이 아닙니다.").refine(isGachonEmail, {
     message: "@gachon.ac.kr 이메일만 사용할 수 있습니다.",
   }),
@@ -73,6 +78,7 @@ export async function requestStudentOtp(prevState: unknown, formData: FormData) 
     name: formData.get("name"),
     department: formData.get("department"),
     studentNumber: formData.get("studentNumber"),
+    phoneNumber: formData.get("phoneNumber"),
     email: formData.get("email"),
   });
 
@@ -99,6 +105,7 @@ export async function requestStudentOtp(prevState: unknown, formData: FormData) 
       name: payload.name,
       department: payload.department,
       studentNumber: payload.studentNumber,
+      phoneNumber: payload.phoneNumber,
       email: payload.email,
     }),
     {
@@ -187,7 +194,13 @@ export async function verifyStudentOtp(prevState: unknown, formData: FormData) {
     };
   }
 
-  let profilePayload: { name?: string; department?: string; studentNumber?: string; email?: string };
+  let profilePayload: {
+    name?: string;
+    department?: string;
+    studentNumber?: string;
+    phoneNumber?: string;
+    email?: string;
+  };
   try {
     profilePayload = JSON.parse(pending);
   } catch {
@@ -204,7 +217,13 @@ export async function verifyStudentOtp(prevState: unknown, formData: FormData) {
     };
   }
 
-  if (!profilePayload.name || !profilePayload.department || !profilePayload.studentNumber) {
+  if (
+    !profilePayload.name ||
+    !profilePayload.department ||
+    !profilePayload.studentNumber ||
+    !profilePayload.phoneNumber ||
+    !/^010-\d{4}-\d{4}$/.test(profilePayload.phoneNumber)
+  ) {
     return {
       success: false as const,
       message: "입력 정보가 올바르지 않습니다. 처음부터 다시 시도해 주세요.",
@@ -220,6 +239,7 @@ export async function verifyStudentOtp(prevState: unknown, formData: FormData) {
       name: profilePayload.name,
       department: profilePayload.department,
       student_number: profilePayload.studentNumber,
+      phone_number: profilePayload.phoneNumber,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },
@@ -263,6 +283,9 @@ export async function ensureProfileAfterLogin() {
   }
 
   const profilePayload = JSON.parse(pending);
+  if (!/^010-\d{4}-\d{4}$/.test(profilePayload.phoneNumber ?? "")) {
+    return;
+  }
   const { error } = await supabase.from("profiles").upsert(
     {
       id: user.id,
@@ -270,6 +293,7 @@ export async function ensureProfileAfterLogin() {
       name: profilePayload.name,
       department: profilePayload.department,
       student_number: profilePayload.studentNumber,
+      phone_number: profilePayload.phoneNumber,
       role: "student",
       updated_at: new Date().toISOString(),
     },

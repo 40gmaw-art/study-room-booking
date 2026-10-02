@@ -27,23 +27,55 @@ export default async function MyReservationsPage() {
   // a cancelled one must never reappear after a refresh, and anything
   // before today is history the student can no longer act on, so both are
   // excluded at the query level rather than filtered client-side.
-  const { data: reservations } = await supabase
+  const { data: reservationRows, error: reservationsError } = await supabase
     .from("reservations")
-    .select("reservation_number, reservation_date, start_time, participant_count")
+    .select("reservation_number, reservation_date, start_time, participant_count, user_id, status, created_by_admin")
     .eq("user_id", user.id)
+    .eq("created_by_admin", false)
     .eq("status", "active")
     .gte("reservation_date", todayKey)
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 
-  const upcoming = reservations ?? [];
+  if (process.env.NODE_ENV === "development") {
+    const { data: ownedReservationRows, error: ownedReservationsError } = await supabase
+      .from("reservations")
+      .select("reservation_date, user_id, status, created_by_admin")
+      .eq("user_id", user.id)
+      .order("reservation_date", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    console.info("my_reservations_query_diagnostic", {
+      currentUserId: user.id,
+      todayKey,
+      error: reservationsError
+        ? { code: reservationsError.code, message: reservationsError.message }
+        : null,
+      reservationCount: reservationRows?.length ?? null,
+      reservations: reservationRows?.map((row) => ({
+        reservation_date: row.reservation_date,
+        user_id: row.user_id,
+        status: row.status,
+        created_by_admin: row.created_by_admin,
+      })),
+      ownRowsWithoutListFilters: ownedReservationsError
+        ? { error: { code: ownedReservationsError.code, message: ownedReservationsError.message } }
+        : ownedReservationRows?.map((row) => ({
+            reservation_date: row.reservation_date,
+            user_id: row.user_id,
+            status: row.status,
+            created_by_admin: row.created_by_admin,
+          })),
+    });
+  }
+
+  const upcomingReservations = (reservationRows ?? []).filter((row) => row.reservation_date >= todayKey);
+  const todayReservations = upcomingReservations.filter((row) => row.reservation_date === todayKey);
 
   // Today's summary reflects everything booked today, started or not -- an
   // at-a-glance "what I have today" overview, separate from the actionable
   // list below.
-  const todaySlotRanges = upcoming
-    .filter((row) => row.reservation_date === todayKey)
-    .reduce<{ start: string; end: string }[]>((acc, row) => {
+  const todaySlotRanges = todayReservations.reduce<{ start: string; end: string }[]>((acc, row) => {
       const slot = TIME_SLOTS.find((item) => item.value === row.start_time);
       if (slot) {
         acc.push({ start: slot.start, end: slot.end });
@@ -56,7 +88,16 @@ export default async function MyReservationsPage() {
   // already passed -- reuses the same isPastTimeSlot() the booking page
   // uses, which is a no-op (always false) for any future date and only
   // matters for today's rows.
-  const visibleReservations = upcoming.filter((row) => !isPastTimeSlot(row.reservation_date, row.start_time));
+  const visibleReservations = upcomingReservations.filter((row) => !isPastTimeSlot(row.reservation_date, row.start_time));
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("my_reservations_filter_diagnostic", {
+      queriedCount: upcomingReservations.length,
+      todayCount: todayReservations.length,
+      visibleCount: visibleReservations.length,
+      visibleSlots: visibleReservations.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
+    });
+  }
 
   return (
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">

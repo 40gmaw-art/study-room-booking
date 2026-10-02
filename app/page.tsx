@@ -197,7 +197,7 @@ export default async function Home() {
                 <CardContent className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-white p-3">
                     <p className="text-sm text-slate-500">운영일</p>
-                    <p className="text-xl font-bold text-[#4B3B71]">월–금</p>
+                    <p className="text-xl font-bold text-[#4B3B71]">월~금</p>
                   </div>
                   <div className="rounded-2xl bg-white p-3">
                     <p className="text-sm text-slate-500">예약 범위</p>

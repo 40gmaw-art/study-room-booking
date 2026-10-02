@@ -18,7 +18,7 @@ type SlotAvailability = { value: string; label: string; count: number; full: boo
 
 const AVAILABILITY_REFRESH_MS = 20000;
 
-export function BookingPage({ profile }: { profile: { name: string; department: string; student_number: string; email: string; role: string } | null }) {
+export function BookingPage({ profile }: { profile: { name: string; department: string; student_number: string; phone_number: string | null; email: string; role: string } | null }) {
   const searchParams = useSearchParams();
   const [selectedDate, setSelectedDate] = useState<string>(getDefaultBookingDate());
   const [slots, setSlots] = useState<SlotAvailability[]>([]);
@@ -359,6 +359,10 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
               <div className="grid gap-2">
                 <Label htmlFor="studentNumber">학번</Label>
                 <Input id="studentNumber" value={profile?.student_number ?? ""} readOnly />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phoneNumber">전화번호</Label>
+                <Input id="phoneNumber" value={profile?.phone_number ?? ""} readOnly />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="participantCount">예약 인원</Label>

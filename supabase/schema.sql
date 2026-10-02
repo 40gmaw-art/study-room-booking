@@ -6,6 +6,7 @@ create table if not exists public.profiles (
   name text,
   department text,
   student_number text,
+  phone_number text,
   role text not null default 'student' check (role in ('student','admin')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -15,6 +16,7 @@ create table if not exists public.reservations (
   id uuid primary key default gen_random_uuid(),
   reservation_number text not null unique,
   user_id uuid not null references auth.users(id) on delete cascade,
+  created_by_admin boolean not null default false,
   name text not null,
   department text not null,
   student_number text not null,
@@ -149,6 +151,26 @@ as $$
     where p.id = auth.uid() and p.role = 'admin'
   );
 $$;
+
+create or replace function public.set_reservation_admin_origin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $$
+begin
+  new.created_by_admin := public.is_admin_user();
+  return new;
+end;
+$$;
+
+revoke all on function public.set_reservation_admin_origin() from public;
+grant execute on function public.set_reservation_admin_origin() to authenticated;
+
+drop trigger if exists reservations_set_admin_origin on public.reservations;
+create trigger reservations_set_admin_origin
+before insert on public.reservations
+for each row execute function public.set_reservation_admin_origin();
 
 create or replace function public.get_time_slot_counts(p_date date)
 returns table (start_time time, active_count bigint)

@@ -4,6 +4,7 @@ export type Profile = {
   name: string | null;
   department: string | null;
   student_number: string | null;
+  phone_number: string | null;
   role: "student" | "admin" | string;
   created_at?: string | null;
   updated_at?: string | null;

@@ -108,9 +108,9 @@ function isImmediatelyNextSlot(prevStartTime: string, nextStartTime: string): bo
   return prevIndex !== -1 && TIME_SLOTS[prevIndex + 1]?.value === nextStartTime;
 }
 
-// Display-only grouping for the admin "예약 관리" screen: merges consecutive
-// 1-hour rows into one card spanning a time range, but ONLY when they are
-// (a) back-to-back slots (no gap) AND (b) the SAME booking -- same user_id
+// Display-only grouping for the admin "예약 관리" screen: merges adjacent
+// hourly start-time rows into one card spanning a time range, but ONLY when
+// they are (a) consecutive slots AND (b) the SAME booking -- same user_id
 // AND identical created_at. Postgres's now() is stable for the whole
 // duration of one transaction, so every row create_reservations_bulk
 // inserts for a single bulk request shares the exact same created_at,

@@ -30,13 +30,24 @@ function getStudentNumberError(value: string): string | null {
   return null;
 }
 
+function formatPhoneNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) {
+    return digits;
+  }
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 function emptyOtp() {
   return Array<string>(OTP_LENGTH).fill("");
 }
 
 export function StudentLoginForm() {
   const [step, setStep] = useState<"details" | "otp">("details");
-  const [form, setForm] = useState({ name: "", department: "", studentNumber: "", email: "" });
+  const [form, setForm] = useState({ name: "", department: "", studentNumber: "", phoneNumber: "", email: "" });
   const [otpDigits, setOtpDigits] = useState<string[]>(emptyOtp);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [requestState, requestAction, isRequesting] = useActionState(requestStudentOtp, initialRequestState);
@@ -157,6 +168,23 @@ export function StudentLoginForm() {
             {studentNumberError ? <p className="text-xs font-semibold text-red-600">{studentNumberError}</p> : null}
           </div>
           <div className="grid gap-2">
+            <Label htmlFor="phoneNumber">전화번호</Label>
+            <Input
+              id="phoneNumber"
+              name="phoneNumber"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="010-0000-0000"
+              maxLength={13}
+              required
+              value={form.phoneNumber}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, phoneNumber: formatPhoneNumber(event.target.value) }))
+              }
+            />
+          </div>
+          <div className="grid gap-2">
             <Label htmlFor="email">가천대학교 이메일</Label>
             <Input
               id="email"
@@ -236,6 +264,7 @@ export function StudentLoginForm() {
               <input type="hidden" name="name" value={form.name} />
               <input type="hidden" name="department" value={form.department} />
               <input type="hidden" name="studentNumber" value={form.studentNumber} />
+              <input type="hidden" name="phoneNumber" value={form.phoneNumber} />
               <input type="hidden" name="email" value={form.email} />
               <input type="hidden" name="intent" value="resend" />
               <Button

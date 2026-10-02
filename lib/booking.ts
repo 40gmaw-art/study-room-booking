@@ -1,10 +1,10 @@
 export const TIME_SLOTS = [
-  { value: "10:00:00", label: "10:00~11:00", start: "10:00", end: "11:00" },
-  { value: "11:00:00", label: "11:00~12:00", start: "11:00", end: "12:00" },
-  { value: "12:00:00", label: "12:00~13:00", start: "12:00", end: "13:00" },
-  { value: "13:00:00", label: "13:00~14:00", start: "13:00", end: "14:00" },
-  { value: "14:00:00", label: "14:00~15:00", start: "14:00", end: "15:00" },
-  { value: "15:00:00", label: "15:00~16:00", start: "15:00", end: "16:00" },
+  { value: "10:00:00", label: "10:00~10:50", start: "10:00", end: "10:50" },
+  { value: "11:00:00", label: "11:00~11:50", start: "11:00", end: "11:50" },
+  { value: "12:00:00", label: "12:00~12:50", start: "12:00", end: "12:50" },
+  { value: "13:00:00", label: "13:00~13:50", start: "13:00", end: "13:50" },
+  { value: "14:00:00", label: "14:00~14:50", start: "14:00", end: "14:50" },
+  { value: "15:00:00", label: "15:00~15:50", start: "15:00", end: "15:50" },
   { value: "16:00:00", label: "16:00~17:00", start: "16:00", end: "17:00" },
 ] as const;
 
@@ -278,9 +278,8 @@ export function getStatusLabel(status: string) {
 export const MIN_PARTICIPANTS = 2;
 export const MAX_PARTICIPANTS = 8;
 
-// A single reservation request can cover at most this many 1-hour slots
-// (i.e. 4 hours) on a given date. Shared by the client UI and the server
-// action so the rule can never drift between them.
+// A single reservation request can cover at most this many hourly start-time
+// slots on a given date. Shared by the client UI and server action.
 export const MAX_TIME_SLOTS_PER_RESERVATION = 4;
 
 export interface TimeRange {
@@ -288,17 +287,20 @@ export interface TimeRange {
   end: string;
 }
 
-// Display-only merge: combines back-to-back 1-hour slots (previous slot's
-// end === next slot's start) into contiguous ranges. The underlying
-// reservation data still stores/sends individual 1-hour slots -- this never
-// changes what gets booked, only how the selection is summarized on screen.
+// Display-only merge: combines adjacent reservation slots, including their
+// 10-minute cleanup gaps, into a single range. The underlying reservation
+// data still stores/sends individual slots.
 export function mergeConsecutiveTimeSlots(slots: Array<{ start: string; end: string }>): TimeRange[] {
   const sorted = [...slots].sort((a, b) => a.start.localeCompare(b.start));
   const merged: TimeRange[] = [];
 
   for (const slot of sorted) {
     const last = merged[merged.length - 1];
-    if (last && last.end === slot.start) {
+    const [lastEndHour, lastEndMinute] = last?.end.split(":").map(Number) ?? [];
+    const [slotStartHour, slotStartMinute] = slot.start.split(":").map(Number);
+    const gapMinutes = (slotStartHour * 60 + slotStartMinute) - (lastEndHour * 60 + lastEndMinute);
+
+    if (last && (gapMinutes === 0 || gapMinutes === 10)) {
       last.end = slot.end;
     } else {
       merged.push({ start: slot.start, end: slot.end });

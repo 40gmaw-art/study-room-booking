@@ -33,8 +33,8 @@ export default async function AdminPage() {
   const fullSlotCount = countFullSlots(rows);
 
   // Reuses the same merge logic as the "예약 관리" screen so a bulk booking's
-  // consecutive hours (e.g. 13:00~14:00 + 14:00~15:00) show as one range
-  // ("13:00 ~ 15:00") here too, instead of one line per 1-hour row.
+  // consecutive slots (e.g. 13:00~13:50 + 14:00~14:50) show as one range
+  // ("13:00 ~ 14:50") here too, instead of one line per slot.
   const todayBookings = groupReservationsIntoBookings(rows).find((group) => group.date === todayKey)?.bookings ?? [];
 
   return (
