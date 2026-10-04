@@ -24,11 +24,49 @@ function formatSlotTime(startTime: string) {
   return slot ? formatTimeRange({ start: slot.start, end: slot.end }) : startTime;
 }
 
+function formatDateHeading(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00+09:00`);
+  const weekday = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+  }).format(date);
+  return `${dateKey} (${weekday})`;
+}
+
 export function MyReservationsList({ initialReservations }: { initialReservations: MyReservationRow[] }) {
-  const [reservations, setReservations] = useState(initialReservations);
+  const [removedReservationNumbers, setRemovedReservationNumbers] = useState<Set<string>>(() => new Set());
   const [cancelTarget, setCancelTarget] = useState<MyReservationRow | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [cancelState, cancelAction, isCancelling] = useActionState(cancelReservationAction, initialCancelState);
+  const reservations = initialReservations.filter(
+    (reservation) => !removedReservationNumbers.has(reservation.reservation_number),
+  );
+  const reservationsByDate = new Map<string, MyReservationRow[]>();
+  for (const reservation of reservations) {
+    const dateReservations = reservationsByDate.get(reservation.reservation_date) ?? [];
+    dateReservations.push(reservation);
+    reservationsByDate.set(reservation.reservation_date, dateReservations);
+  }
+  const dateGroups = Array.from(reservationsByDate.entries())
+    .sort(([firstDate], [secondDate]) => firstDate.localeCompare(secondDate))
+    .map(([date, dateReservations]) => [
+      date,
+      [...dateReservations].sort((first, second) => first.start_time.localeCompare(second.start_time)),
+    ] as const);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      const renderedReservations = initialReservations.filter(
+        (reservation) => !removedReservationNumbers.has(reservation.reservation_number),
+      );
+      console.info("[my-reservations] component render data", {
+        propsCount: initialReservations.length,
+        props: initialReservations.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
+        renderedCount: renderedReservations.length,
+        rendered: renderedReservations.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
+      });
+    }
+  }, [initialReservations, removedReservationNumbers]);
 
   useEffect(() => {
     if (!cancelState.message) {
@@ -41,7 +79,7 @@ export function MyReservationsList({ initialReservations }: { initialReservation
       // this list immediately -- matching what a re-fetch (refresh, or
       // navigating away and back) would show, since the page query only
       // ever selects status='active' rows.
-      setReservations((prev) => prev.filter((row) => row.reservation_number !== cancelledNumber));
+      setRemovedReservationNumbers((previous) => new Set(previous).add(cancelledNumber));
       setCancelTarget(null);
     }
 
@@ -63,38 +101,45 @@ export function MyReservationsList({ initialReservations }: { initialReservation
       {!reservations.length ? (
         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">예약 내역이 없습니다.</div>
       ) : (
-        reservations.map((reservation) => {
-          // Cancellable only while the slot hasn't started yet -- reuses the
-          // same date+time judgment the booking page uses to gray out past
-          // slots, so "already started" means the same thing everywhere.
-          const hasStarted = isPastTimeSlot(reservation.reservation_date, reservation.start_time);
+        dateGroups.map(([date, dateReservations], groupIndex) => {
           return (
-            <div key={reservation.reservation_number} className="rounded-2xl border border-slate-200 p-4">
-              <p className="font-semibold text-[#4B3B71]">{formatSlotTime(reservation.start_time)}</p>
-              <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                <div>날짜: {reservation.reservation_date}</div>
-                <div>예약 인원: {reservation.participant_count}명</div>
-              </div>
-              {!hasStarted ? (
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={() => setCancelTarget(reservation)}
+            <section key={date} className={`space-y-3 ${groupIndex > 0 ? "pt-5" : ""}`}>
+              <h3 className="px-1 text-lg font-bold text-[#4B3B71] sm:text-xl">{formatDateHeading(date)}</h3>
+              {dateReservations.map((reservation) => {
+                // Cancellable only while the slot hasn't started yet -- reuses the
+                // same date+time judgment the booking page uses.
+                const hasStarted = isPastTimeSlot(reservation.reservation_date, reservation.start_time);
+                return (
+                  <div
+                    key={reservation.reservation_number}
+                    className="rounded-xl border border-[#4B3B71]/15 bg-white p-4 sm:p-5"
                   >
-                    예약 취소
-                  </Button>
-                </div>
-              ) : (
-                <div className="mt-3 flex justify-end">
-                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
-                    취소 불가 · 이미 이용 시간이 시작되었습니다
-                  </span>
-                </div>
-              )}
-            </div>
+                    <p className="text-lg font-bold text-[#4B3B71]">{formatSlotTime(reservation.start_time)}</p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                      <p className="text-sm text-slate-600">
+                        <span className="text-xs font-medium text-slate-500">예약 인원</span>
+                        <span className="ml-2 font-medium text-slate-700">{reservation.participant_count}명</span>
+                      </p>
+                      {hasStarted ? (
+                        <span className="justify-self-end rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                          취소 불가 · 이미 이용 시간이 시작되었습니다
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="justify-self-end rounded-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setCancelTarget(reservation)}
+                        >
+                          예약 취소
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
           );
         })
       )}

@@ -141,6 +141,7 @@ export function groupReservationsIntoBookings(rows: AdminReservationRow[]): Admi
       const lastRow = currentGroup?.[currentGroup.length - 1];
       const sameBooking =
         lastRow !== undefined &&
+        lastRow.reservation_date === row.reservation_date &&
         lastRow.user_id === row.user_id &&
         lastRow.created_at === row.created_at &&
         isImmediatelyNextSlot(lastRow.start_time, row.start_time);

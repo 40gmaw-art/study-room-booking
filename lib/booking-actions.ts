@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { formatTimeRange, getBookingDateValidation, getBookingDates, getSeoulTimeKey, getTodayDateKey, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, parseParticipantCount, TIME_SLOTS } from "@/lib/booking";
@@ -133,10 +134,35 @@ export async function createReservationsBulkAction(prevState: unknown, formData:
     };
   }
 
-  const reservations = (data as Array<{ reservation_number: string; start_time: string }>).map((row) => ({
+  const createdRows = data as Array<{
+    user_id: string;
+    reservation_date: string;
+    start_time: string;
+    status: string;
+    created_by_admin: boolean;
+    reservation_number: string;
+  }>;
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("reservation_rpc_created_rows", {
+      authUserId: user.id,
+      requestedDate: date,
+      rows: createdRows.map((row) => ({
+        user_id: row.user_id,
+        reservation_date: row.reservation_date,
+        start_time: row.start_time,
+        status: row.status,
+        created_by_admin: row.created_by_admin,
+      })),
+    });
+  }
+
+  const reservations = createdRows.map((row) => ({
     reservation_number: row.reservation_number,
     start_time: row.start_time,
   }));
+
+  revalidatePath("/my-reservations");
 
   return {
     success: true,

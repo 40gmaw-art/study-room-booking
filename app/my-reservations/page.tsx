@@ -23,6 +23,81 @@ export default async function MyReservationsPage() {
 
   const todayKey = getTodayDateKey();
 
+  if (process.env.NODE_ENV === "development") {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, role, student_number")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    console.info("my_reservations_diagnostic_identity", {
+      authUserId: user.id,
+      profileId: profile?.id ?? null,
+      profileRole: profile?.role ?? null,
+      profileFound: Boolean(profile),
+      studentNumberSuffix: profile?.student_number?.slice(-2) ?? null,
+      error: profileError
+        ? { code: profileError.code, message: profileError.message }
+        : null,
+    });
+
+    const userRows = await supabase
+      .from("reservations")
+      .select("user_id")
+      .eq("user_id", user.id);
+    console.info("my_reservations_diagnostic_stage", {
+      stage: "user_id",
+      count: userRows.data?.length ?? null,
+      error: userRows.error ? { code: userRows.error.code, message: userRows.error.message } : null,
+    });
+
+    const activeRows = await supabase
+      .from("reservations")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+    console.info("my_reservations_diagnostic_stage", {
+      stage: "user_id + status=active",
+      count: activeRows.data?.length ?? null,
+      error: activeRows.error ? { code: activeRows.error.code, message: activeRows.error.message } : null,
+    });
+
+    const studentRows = await supabase
+      .from("reservations")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .eq("created_by_admin", false);
+    console.info("my_reservations_diagnostic_stage", {
+      stage: "user_id + status=active + created_by_admin=false",
+      count: studentRows.data?.length ?? null,
+      error: studentRows.error ? { code: studentRows.error.code, message: studentRows.error.message } : null,
+    });
+
+    const upcomingRows = await supabase
+      .from("reservations")
+      .select("user_id, reservation_date, start_time, status, created_by_admin")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .eq("created_by_admin", false)
+      .gte("reservation_date", todayKey);
+    console.info("my_reservations_diagnostic_stage", {
+      stage: "user_id + status=active + created_by_admin=false + reservation_date>=today(KST)",
+      todayKey,
+      count: upcomingRows.data?.length ?? null,
+      rows: upcomingRows.data?.map((row) => ({
+        user_id: row.user_id,
+        reservation_date: row.reservation_date,
+        start_time: row.start_time,
+        status: row.status,
+        created_by_admin: row.created_by_admin,
+      })),
+      error: upcomingRows.error
+        ? { code: upcomingRows.error.code, message: upcomingRows.error.message }
+        : null,
+    });
+  }
+
   // Only ACTIVE reservations from today onward are relevant to a student --
   // a cancelled one must never reappear after a refresh, and anything
   // before today is history the student can no longer act on, so both are
@@ -37,39 +112,28 @@ export default async function MyReservationsPage() {
     .order("reservation_date", { ascending: true })
     .order("start_time", { ascending: true });
 
-  if (process.env.NODE_ENV === "development") {
-    const { data: ownedReservationRows, error: ownedReservationsError } = await supabase
-      .from("reservations")
-      .select("reservation_date, user_id, status, created_by_admin")
-      .eq("user_id", user.id)
-      .order("reservation_date", { ascending: true })
-      .order("start_time", { ascending: true });
+  if (reservationsError) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("my_reservations_query_failed", {
+        currentUserId: user.id,
+        todayKey,
+        code: reservationsError.code,
+        message: reservationsError.message,
+        details: reservationsError.details,
+        hint: reservationsError.hint,
+      });
+    }
+    throw new Error("내 예약 목록을 불러오지 못했습니다.");
+  }
 
-    console.info("my_reservations_query_diagnostic", {
-      currentUserId: user.id,
-      todayKey,
-      error: reservationsError
-        ? { code: reservationsError.code, message: reservationsError.message }
-        : null,
-      reservationCount: reservationRows?.length ?? null,
-      reservations: reservationRows?.map((row) => ({
-        reservation_date: row.reservation_date,
-        user_id: row.user_id,
-        status: row.status,
-        created_by_admin: row.created_by_admin,
-      })),
-      ownRowsWithoutListFilters: ownedReservationsError
-        ? { error: { code: ownedReservationsError.code, message: ownedReservationsError.message } }
-        : ownedReservationRows?.map((row) => ({
-            reservation_date: row.reservation_date,
-            user_id: row.user_id,
-            status: row.status,
-            created_by_admin: row.created_by_admin,
-          })),
+  if (process.env.NODE_ENV === "development") {
+    console.info("[my-reservations] fetched reservations", {
+      count: reservationRows?.length ?? 0,
+      reservations: reservationRows?.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
     });
   }
 
-  const upcomingReservations = (reservationRows ?? []).filter((row) => row.reservation_date >= todayKey);
+  const upcomingReservations = reservationRows ?? [];
   const todayReservations = upcomingReservations.filter((row) => row.reservation_date === todayKey);
 
   // Today's summary reflects everything booked today, started or not -- an
@@ -84,11 +148,13 @@ export default async function MyReservationsPage() {
     }, []);
   const todayRanges = mergeConsecutiveTimeSlots(todaySlotRanges).map(formatTimeRange);
 
-  // The actionable list below excludes anything whose start time has
-  // already passed -- reuses the same isPastTimeSlot() the booking page
-  // uses, which is a no-op (always false) for any future date and only
-  // matters for today's rows.
-  const visibleReservations = upcomingReservations.filter((row) => !isPastTimeSlot(row.reservation_date, row.start_time));
+  // Future dates always remain in the list; only today's rows are checked
+  // against the current time before being shown as actionable reservations.
+  const visibleReservations = upcomingReservations.filter(
+    (row) =>
+      row.reservation_date > todayKey ||
+      (row.reservation_date === todayKey && !isPastTimeSlot(row.reservation_date, row.start_time)),
+  );
 
   if (process.env.NODE_ENV === "development") {
     console.info("my_reservations_filter_diagnostic", {
@@ -96,6 +162,10 @@ export default async function MyReservationsPage() {
       todayCount: todayReservations.length,
       visibleCount: visibleReservations.length,
       visibleSlots: visibleReservations.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
+    });
+    console.info("[my-reservations] props reservations", {
+      count: visibleReservations.length,
+      reservations: visibleReservations.map(({ reservation_date, start_time }) => ({ reservation_date, start_time })),
     });
   }
 
@@ -139,7 +209,7 @@ export default async function MyReservationsPage() {
 
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>예약 목록</CardTitle>
+            <CardTitle className="text-lg font-bold tracking-normal text-[#3f315d] sm:text-xl">예약 목록</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <MyReservationsList initialReservations={visibleReservations} />
