@@ -171,21 +171,12 @@ export async function createReservationsBulkAction(prevState: unknown, formData:
   };
 }
 
-export async function cancelReservationAction(prevState: unknown, formData: FormData) {
-  const reservationNumber = String(formData.get("reservationNumber") || "").trim();
-  if (!reservationNumber) {
-    return { success: false, message: "예약번호를 입력해 주세요." };
-  }
+type CancelReservationResult = { success: boolean; message: string; reservationNumber?: string };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
+async function cancelReservation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  reservationNumber: string,
+): Promise<CancelReservationResult> {
   const { data, error } = await supabase.rpc("cancel_reservation", {
     p_reservation_number: reservationNumber,
   });
@@ -201,6 +192,99 @@ export async function cancelReservationAction(prevState: unknown, formData: Form
     success: true,
     message: "예약이 취소되었습니다.",
     reservationNumber: data.reservation_number,
+  };
+}
+
+export async function cancelReservationAction(
+  prevState: unknown,
+  formData: FormData,
+): Promise<CancelReservationResult> {
+  const reservationNumber = String(formData.get("reservationNumber") || "").trim();
+  if (!reservationNumber) {
+    return { success: false, message: "예약번호를 입력해 주세요." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  return cancelReservation(supabase, reservationNumber);
+}
+
+export async function cancelReservationsByDateAction(formData: FormData) {
+  const reservationDate = String(formData.get("reservationDate") || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(reservationDate)) {
+    return {
+      success: false,
+      message: "예약 날짜가 올바르지 않습니다.",
+      cancelledReservationNumbers: [] as string[],
+    };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: reservations, error } = await supabase
+    .from("reservations")
+    .select("reservation_number")
+    .eq("user_id", user.id)
+    .eq("reservation_date", reservationDate)
+    .eq("created_by_admin", false)
+    .eq("status", "active");
+
+  if (error) {
+    return {
+      success: false,
+      message: "해당 날짜의 예약 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
+      cancelledReservationNumbers: [] as string[],
+    };
+  }
+
+  if (!reservations?.length) {
+    return {
+      success: false,
+      message: "취소할 예약이 없습니다. 예약 목록을 새로고침해 주세요.",
+      cancelledReservationNumbers: [] as string[],
+    };
+  }
+
+  const cancelledReservationNumbers: string[] = [];
+  let failedCount = 0;
+
+  for (const reservation of reservations) {
+    const result = await cancelReservation(supabase, reservation.reservation_number);
+    if (result.success) {
+      cancelledReservationNumbers.push(reservation.reservation_number);
+    } else {
+      failedCount += 1;
+    }
+  }
+
+  if (!cancelledReservationNumbers.length) {
+    return {
+      success: false,
+      message: "예약을 취소하지 못했습니다. 이미 시작된 예약인지 확인해 주세요.",
+      cancelledReservationNumbers,
+    };
+  }
+
+  return {
+    success: true,
+    message: failedCount
+      ? `${cancelledReservationNumbers.length}개의 예약을 취소했습니다. 취소할 수 없는 ${failedCount}개 예약은 유지되었습니다.`
+      : `${cancelledReservationNumbers.length}개의 예약이 취소되었습니다.`,
+    cancelledReservationNumbers,
   };
 }
 

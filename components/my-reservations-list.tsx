@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { cancelReservationAction } from "@/lib/booking-actions";
+import { cancelReservationAction, cancelReservationsByDateAction } from "@/lib/booking-actions";
 import { formatTimeRange, isPastTimeSlot, TIME_SLOTS } from "@/lib/booking";
 
 // Only ACTIVE reservations are ever passed in (see app/my-reservations/page.tsx),
@@ -36,8 +36,11 @@ function formatDateHeading(dateKey: string) {
 export function MyReservationsList({ initialReservations }: { initialReservations: MyReservationRow[] }) {
   const [removedReservationNumbers, setRemovedReservationNumbers] = useState<Set<string>>(() => new Set());
   const [cancelTarget, setCancelTarget] = useState<MyReservationRow | null>(null);
+  const [batchCancelDate, setBatchCancelDate] = useState<string | null>(null);
+  const [isBatchCancelling, setIsBatchCancelling] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [cancelState, cancelAction, isCancelling] = useActionState(cancelReservationAction, initialCancelState);
+  const isAnyCancellationPending = isCancelling || isBatchCancelling;
   const reservations = initialReservations.filter(
     (reservation) => !removedReservationNumbers.has(reservation.reservation_number),
   );
@@ -86,6 +89,32 @@ export function MyReservationsList({ initialReservations }: { initialReservation
     setFeedback({ tone: cancelState.success ? "success" : "error", text: cancelState.message });
   }, [cancelState]);
 
+  async function confirmBatchCancellation() {
+    if (!batchCancelDate) {
+      return;
+    }
+
+    setIsBatchCancelling(true);
+    setFeedback(null);
+    try {
+      const formData = new FormData();
+      formData.set("reservationDate", batchCancelDate);
+      const result = await cancelReservationsByDateAction(formData);
+
+      if (result.cancelledReservationNumbers.length) {
+        setRemovedReservationNumbers((previous) => {
+          const next = new Set(previous);
+          result.cancelledReservationNumbers.forEach((number) => next.add(number));
+          return next;
+        });
+      }
+      setFeedback({ tone: result.success ? "success" : "error", text: result.message });
+      setBatchCancelDate(null);
+    } finally {
+      setIsBatchCancelling(false);
+    }
+  }
+
   return (
     <>
       {feedback ? (
@@ -102,9 +131,25 @@ export function MyReservationsList({ initialReservations }: { initialReservation
         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">예약 내역이 없습니다.</div>
       ) : (
         dateGroups.map(([date, dateReservations], groupIndex) => {
+          const cancellableCount = dateReservations.filter(
+            (reservation) => !isPastTimeSlot(reservation.reservation_date, reservation.start_time),
+          ).length;
+
           return (
             <section key={date} className={`space-y-3 ${groupIndex > 0 ? "pt-5" : ""}`}>
-              <h3 className="px-1 text-lg font-bold text-[#4B3B71] sm:text-xl">{formatDateHeading(date)}</h3>
+              <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-lg font-bold text-[#4B3B71] sm:text-xl">{formatDateHeading(date)}</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit rounded-full border-[#4B3B71]/30 text-[#4B3B71] hover:bg-[#f5efff]"
+                  disabled={cancellableCount === 0 || isAnyCancellationPending}
+                  onClick={() => setBatchCancelDate(date)}
+                >
+                  예약 일괄 취소
+                </Button>
+              </div>
               {dateReservations.map((reservation) => {
                 // Cancellable only while the slot hasn't started yet -- reuses the
                 // same date+time judgment the booking page uses.
@@ -171,7 +216,7 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                 variant="outline"
                 className="rounded-full"
                 onClick={() => setCancelTarget(null)}
-                disabled={isCancelling}
+                disabled={isAnyCancellationPending}
               >
                 닫기
               </Button>
@@ -183,6 +228,55 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                 {isCancelling ? "취소 처리 중..." : "취소하기"}
               </Button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {batchCancelDate ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="batch-cancel-title"
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+            <h2 id="batch-cancel-title" className="text-lg font-bold text-[#241b35]">
+              {batchCancelDate} 예약을 모두 취소하시겠습니까?
+            </h2>
+            {(() => {
+              const batchReservations = reservationsByDate.get(batchCancelDate) ?? [];
+              const cancellableCount = batchReservations.filter(
+                (reservation) => !isPastTimeSlot(reservation.reservation_date, reservation.start_time),
+              ).length;
+
+              return (
+                <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                  {cancellableCount === batchReservations.length
+                    ? `총 ${batchReservations.length}개의 예약이 취소됩니다.`
+                    : `총 ${batchReservations.length}개 예약 중 ${cancellableCount}개를 취소할 수 있습니다.`}
+                </p>
+              );
+            })()}
+            <p className="mt-3 text-xs font-semibold text-red-600">취소된 예약은 복구할 수 없습니다.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setBatchCancelDate(null)}
+                disabled={isBatchCancelling}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-red-600 text-white hover:bg-red-700"
+                onClick={confirmBatchCancellation}
+                disabled={isBatchCancelling}
+              >
+                {isBatchCancelling ? "취소 처리 중..." : "예약 일괄 취소"}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

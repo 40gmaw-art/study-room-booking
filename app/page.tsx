@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LogoutButton } from "@/components/logout-button";
 import { MainHeroImage } from "@/components/main-hero-image";
 import { StudyRoomLocationModal } from "@/components/study-room-location-modal";
+import { StudentUsageNotice } from "@/components/student-usage-notice";
 import { createClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/admin-session";
 
@@ -227,6 +228,7 @@ export default async function Home() {
           </div>
         </section>
       </div>
+      {isStudent ? <StudentUsageNotice /> : null}
     </main>
   );
 }
