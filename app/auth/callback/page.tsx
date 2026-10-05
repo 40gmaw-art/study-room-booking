@@ -11,5 +11,5 @@ export default async function AuthCallbackPage() {
   // was missing the same router-cache bust -- a login completing through
   // here could still leave a stale cached "/" from an earlier session.
   revalidatePath("/", "layout");
-  redirect("/booking");
+  redirect("/");
 }

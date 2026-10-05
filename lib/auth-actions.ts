@@ -262,7 +262,7 @@ export async function verifyStudentOtp(prevState: unknown, formData: FormData) {
   // from the router cache for a while after this auth change, showing the
   // wrong role's UI intermittently until that cache entry naturally expires.
   revalidatePath("/", "layout");
-  redirect("/booking");
+  redirect("/");
 }
 
 export async function ensureProfileAfterLogin() {

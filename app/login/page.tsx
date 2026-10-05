@@ -23,7 +23,7 @@ export default async function StudentLoginPage() {
       .single();
 
     const isFullAdmin = profile?.role === "admin" && (await verifyAdminSession(user.id));
-    redirect(isFullAdmin ? "/admin" : "/booking");
+    redirect(isFullAdmin ? "/admin" : "/");
   }
 
   return (
