@@ -52,7 +52,6 @@ export default async function Home() {
     { href: "/admin", label: "관리자 대시보드", primary: true },
     { href: "/admin/reservations", label: "예약 관리", primary: false },
   ];
-  const adminMobileButtonCount = adminMenuLinks.length + 1;
 
   const studentDisplayName = profile?.name?.trim() || "학생 회원";
   const studentDisplayNumber = profile?.student_number?.trim() || "-";
@@ -68,7 +67,11 @@ export default async function Home() {
             <div className="absolute inset-x-0 top-0 z-10 h-2/5 bg-gradient-to-b from-[#160f2b]/75 via-[#160f2b]/25 to-transparent" />
 
             {/* Site name: always top-left */}
-            <div className="absolute left-4 top-4 z-20 max-w-[62%] sm:left-6 sm:top-6 sm:max-w-[70%] lg:left-8 lg:top-8">
+            <div
+              className={`absolute left-4 top-4 z-20 sm:left-6 sm:top-6 sm:max-w-[70%] lg:left-8 lg:top-8 ${
+                isAdmin ? "max-w-[52%]" : "max-w-[62%]"
+              }`}
+            >
               <p className="text-xs font-semibold uppercase tracking-wider text-white/85">
                 가천대학교 제40대 경영대학
               </p>
@@ -78,14 +81,18 @@ export default async function Home() {
             </div>
 
             {isAdmin ? (
-              <div className="absolute right-4 top-4 z-20 hidden flex-wrap items-center justify-end gap-2.5 sm:right-6 sm:top-6 sm:flex lg:right-8 lg:top-8">
-                {adminMenuLinks.map((item) => (
-                  <Button key={item.href} asChild className={heroButtonClass(item.primary, "min-w-[104px] px-5 text-sm")}>
-                    <Link href={item.href}>{item.label}</Link>
-                  </Button>
-                ))}
-                <LogoutButton className={heroButtonClass(false, "min-w-[88px] px-5 text-sm")} />
-              </div>
+              <>
+                <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6 lg:right-8 lg:top-8">
+                  <LogoutButton className={heroButtonClass(false, "min-w-[88px] px-5 text-sm")} />
+                </div>
+                <div className="absolute right-4 top-20 z-20 hidden flex-wrap items-center justify-end gap-2.5 sm:right-6 sm:top-20 sm:flex lg:right-8 lg:top-24">
+                  {adminMenuLinks.map((item) => (
+                    <Button key={item.href} asChild className={heroButtonClass(item.primary, "min-w-[104px] px-5 text-sm")}>
+                      <Link href={item.href}>{item.label}</Link>
+                    </Button>
+                  ))}
+                </div>
+              </>
             ) : isStudent ? (
               <>
                 {/* Student: profile chip + small logout, hero top-right (own info only) */}
@@ -125,17 +132,12 @@ export default async function Home() {
 
           {/* Mobile-only menu strip, directly below the hero image (admin only) */}
           {isAdmin ? (
-            <div
-              className={`grid grid-cols-2 gap-2 bg-gradient-to-r from-[#3F315D] to-[#4B3B71] p-4 sm:hidden ${
-                adminMobileButtonCount % 2 === 1 ? "[&>*:last-child]:col-span-2" : ""
-              }`}
-            >
+            <div className="grid grid-cols-2 gap-2 bg-gradient-to-r from-[#3F315D] to-[#4B3B71] p-4 sm:hidden">
               {adminMenuLinks.map((item) => (
                 <Button key={item.href} asChild className={heroButtonClass(item.primary, "w-full px-3 text-xs")}>
                   <Link href={item.href}>{item.label}</Link>
                 </Button>
               ))}
-              <LogoutButton className={heroButtonClass(false, "w-full px-3 text-xs")} />
             </div>
           ) : null}
 

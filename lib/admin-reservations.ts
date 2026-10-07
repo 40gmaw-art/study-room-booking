@@ -184,17 +184,6 @@ export function groupReservationsIntoBookings(rows: AdminReservationRow[]): Admi
   });
 }
 
-export function countFullSlots(rows: AdminReservationRow[]): number {
-  return groupActiveReservations(rows).reduce(
-    (sum, group) => sum + group.slots.filter((slot) => slot.full).length,
-    0,
-  );
-}
-
-export function sumParticipants(rows: AdminReservationRow[]): number {
-  return rows.reduce((sum, row) => sum + row.participant_count, 0);
-}
-
 export function formatFullKoreanDate(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
   return `${year}년 ${month}월 ${day}일`;

@@ -53,6 +53,24 @@
   }
 }
 
+.admin-stairs-game-desktop {
+  display: none;
+}
+
+.admin-stairs-game-mobile {
+  display: block;
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .admin-stairs-game-desktop {
+    display: block;
+  }
+
+  .admin-stairs-game-mobile {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

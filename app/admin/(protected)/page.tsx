@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/logout-button";
+import { AdminStairsGame } from "@/components/admin-stairs-game";
 import { createClient } from "@/lib/supabase/server";
-import { countFullSlots, groupReservationsIntoBookings, sumParticipants } from "@/lib/admin-reservations";
+import { groupReservationsIntoBookings } from "@/lib/admin-reservations";
 import { getSeoulDateParts } from "@/lib/booking";
 
 export const revalidate = 0;
@@ -21,16 +22,9 @@ export default async function AdminPage() {
     .eq("status", "active");
 
   const rows = reservations ?? [];
-  // "예약 건수"(rows) and "예약 인원"(participant_count sum) are intentionally
-  // separate numbers -- a single reservation row can represent up to 6 people.
-  const totalReservationCount = rows.length;
-  const totalParticipantCount = sumParticipants(rows);
 
   const todayParts = getSeoulDateParts();
   const todayKey = `${todayParts.year}-${String(todayParts.month).padStart(2, "0")}-${String(todayParts.day).padStart(2, "0")}`;
-  const todayReservationCount = rows.filter((row) => row.reservation_date === todayKey).length;
-
-  const fullSlotCount = countFullSlots(rows);
 
   // Reuses the same merge logic as the "예약 관리" screen so a bulk booking's
   // consecutive slots (e.g. 13:00~13:50 + 14:00~14:50) show as one range
@@ -78,32 +72,7 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>전체 예약 건수</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold text-[#4B3B71]">{totalReservationCount}</CardContent>
-          </Card>
-          <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>전체 예약 인원</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold text-[#4B3B71]">{totalParticipantCount}명</CardContent>
-          </Card>
-          <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>오늘 예약 건수</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold text-[#4B3B71]">{todayReservationCount}</CardContent>
-          </Card>
-          <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>만석 시간대</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold text-[#4B3B71]">{fullSlotCount}</CardContent>
-          </Card>
-        </div>
+        <AdminStairsGame />
       </div>
     </main>
   );
