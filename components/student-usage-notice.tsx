@@ -60,8 +60,8 @@ export function StudentUsageNotice() {
         <div className="border-b border-slate-300 px-5 py-5">
           <p className="text-base font-medium text-slate-700">노쇼 또는 이용 후 미정리 시</p>
           <div className="mt-3 space-y-2 border border-[#4B3B71]/25 bg-[#f8f4ff] px-4 py-3">
-            <p className="text-base font-bold text-[#4B3B71] sm:text-lg">1회 · 1개월 예약 제한</p>
-            <p className="text-base font-bold text-[#4B3B71] sm:text-lg">2회 · 예약 이용 불가</p>
+            <p className="text-base font-bold text-[#4B3B71] sm:text-lg">1회 - 1개월 예약 제한</p>
+            <p className="text-base font-bold text-[#4B3B71] sm:text-lg">2회 - 영구 예약 제한</p>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-600">
             쾌적한 이용을 위해 이용수칙을 지켜주세요.

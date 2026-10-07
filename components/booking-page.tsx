@@ -17,6 +17,9 @@ import { useActionState } from "react";
 type SlotAvailability = { value: string; label: string; count: number; full: boolean };
 
 const AVAILABILITY_REFRESH_MS = 20000;
+const STUDENT_BOOKING_TIME_SLOTS = TIME_SLOTS.map((slot) =>
+  slot.value === "16:00:00" ? { ...slot, label: "16:00~16:50", end: "16:50" } : slot,
+);
 
 export function BookingPage({ profile }: { profile: { name: string; department: string; student_number: string; phone_number: string | null; email: string; role: string } | null }) {
   const searchParams = useSearchParams();
@@ -145,7 +148,14 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   const selectedDateAvailability = availableDates.find((option) => option.date === selectedDate);
   const isSelectedDateEnabled = selectedDateAvailability?.enabled ?? false;
 
-  const selectedSlotList = TIME_SLOTS.filter((slot) => selectedSlots.has(slot.value));
+  const selectedSlotList = STUDENT_BOOKING_TIME_SLOTS.filter((slot) => selectedSlots.has(slot.value));
+  const bookingSlotIndices = Array.from(new Set([...myReservedSlots, ...selectedSlots]))
+    .map((value) => TIME_SLOTS.findIndex((timeSlot) => timeSlot.value === value))
+    .filter((slotIndex) => slotIndex >= 0)
+    .sort((a, b) => a - b);
+  const hasNonConsecutiveSelectedSlots = bookingSlotIndices.some(
+    (slotIndex, index) => index > 0 && slotIndex !== bookingSlotIndices[index - 1] + 1,
+  );
   const mergedTimeRanges = mergeConsecutiveTimeSlots(selectedSlotList);
 
   function toggleSlot(value: string) {
@@ -155,6 +165,9 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
       if (next.has(value)) {
         next.delete(value);
       } else {
+        if (next.size >= MAX_TIME_SLOTS_PER_RESERVATION) {
+          return prev;
+        }
         next.add(value);
       }
       return next;
@@ -240,7 +253,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
               </div>
             ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {TIME_SLOTS.map((slot) => {
+              {STUDENT_BOOKING_TIME_SLOTS.map((slot) => {
                 const detail = slots.find((item) => item.value === slot.value);
                 const isPast = isPastTimeSlot(selectedDate, slot.value);
                 const alreadyReservedByMe = myReservedSlots.has(slot.value);
@@ -326,7 +339,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
 
             {mergedTimeRanges.length > 0 ? (
               <div className="mt-4 rounded-2xl border border-[#4B3B71]/15 bg-[#f5efff] p-4">
-                <p className="text-sm font-semibold text-[#4B3B71]">선택한 시간대 {mergedTimeRanges.length}개</p>
+                <p className="text-sm font-semibold text-[#4B3B71]">선택한 시간대 {selectedSlotList.length}개</p>
                 <ul className="mt-2 space-y-1 text-sm text-slate-700">
                   {mergedTimeRanges.map((range) => (
                     <li key={`${range.start}-${range.end}`}>· {formatTimeRange(range)}</li>
@@ -338,52 +351,89 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
         </Card>
 
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle>예약 확인</CardTitle>
             <CardDescription>선택한 내용과 프로필 정보를 확인한 뒤 예약을 완료하세요.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form action={formAction} className="space-y-4">
+          <CardContent className="pt-0">
+            <form action={formAction} className="space-y-3">
               <input type="hidden" name="reservationDate" value={selectedDate} />
               {selectedSlotList.map((slot) => (
                 <input key={slot.value} type="hidden" name="startTimes" value={slot.value} />
               ))}
-              <div className="grid gap-2">
-                <Label htmlFor="name">이름</Label>
-                <Input id="name" value={profile?.name ?? ""} readOnly />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="department">학과</Label>
-                <Input id="department" value={profile?.department ?? ""} readOnly />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="studentNumber">학번</Label>
-                <Input id="studentNumber" value={profile?.student_number ?? ""} readOnly />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phoneNumber">전화번호</Label>
-                <Input id="phoneNumber" value={profile?.phone_number ?? ""} readOnly />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="participantCount">예약 인원</Label>
-                <Input
-                  id="participantCount"
-                  name="participantCount"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_PARTICIPANTS}
-                  max={MAX_PARTICIPANTS}
-                  step={1}
-                  value={participantCountInput}
-                  onChange={(event) => setParticipantCountInput(event.target.value)}
-                  className="max-w-[120px]"
-                />
-                <p className="text-xs text-slate-500">선택한 모든 시간대에 동일한 예약 인원이 적용됩니다.</p>
-                {selectedSlotList.length > 0 ? (
-                  <p className={`text-xs font-semibold ${exceedsAvailableCapacity ? "text-red-600" : "text-[#4B3B71]"}`}>
-                    {exceedsAvailableCapacity
-                      ? "선택한 시간대 중 잔여 인원이 부족한 시간대가 있습니다."
-                      : `선택한 시간대에 최소 ${MIN_PARTICIPANTS}명에서 최대 ${maxAllowedForSelection}명까지 예약할 수 있습니다.`}
+              <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-slate-100 py-2">
+                  <dt className="shrink-0 text-sm text-slate-500">이름</dt>
+                  <dd className="break-words text-sm font-medium text-slate-800">{profile?.name ?? ""}</dd>
+                </div>
+                <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-slate-100 py-2">
+                  <dt className="shrink-0 text-sm text-slate-500">학과</dt>
+                  <dd className="break-words text-sm font-medium text-slate-800">{profile?.department ?? ""}</dd>
+                </div>
+                <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-slate-100 py-2">
+                  <dt className="shrink-0 text-sm text-slate-500">학번</dt>
+                  <dd className="break-words text-sm font-medium text-slate-800">{profile?.student_number ?? ""}</dd>
+                </div>
+                <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-slate-100 py-2">
+                  <dt className="shrink-0 text-sm text-slate-500">전화번호</dt>
+                  <dd className="break-words text-sm font-medium text-slate-800">{profile?.phone_number ?? ""}</dd>
+                </div>
+              </dl>
+              <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+                  <dt>
+                    <Label htmlFor="participantCount" className="font-medium text-slate-600">예약 인원</Label>
+                  </dt>
+                  <dd>
+                    <Input
+                      id="participantCount"
+                      name="participantCount"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_PARTICIPANTS}
+                      max={MAX_PARTICIPANTS}
+                      step={1}
+                      value={participantCountInput}
+                      onChange={(event) => setParticipantCountInput(event.target.value)}
+                      className="h-8 w-20"
+                    />
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+                  <dt className="text-slate-500">예약일</dt>
+                  <dd className="font-medium text-slate-800">{selectedDate}</dd>
+                </div>
+                <div className="py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <dt className={exceedsMaxTimeSlots ? "font-medium text-red-600" : "font-medium text-slate-600"}>
+                      선택한 시간대
+                    </dt>
+                    {selectedSlotList.length > 0 ? (
+                      <dd className="text-xs text-slate-500">{selectedSlotList.length}개 선택</dd>
+                    ) : null}
+                  </div>
+                  {mergedTimeRanges.length > 0 ? (
+                    <dd className="mt-1.5 grid gap-1 text-sm text-slate-800">
+                      {mergedTimeRanges.map((range) => (
+                        <span key={`${range.start}-${range.end}`}>{formatTimeRange(range)}</span>
+                      ))}
+                    </dd>
+                  ) : (
+                    <dd className="mt-1.5 text-sm text-slate-500">아직 선택한 시간대가 없습니다.</dd>
+                  )}
+                </div>
+              </dl>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{MIN_PARTICIPANTS}~{MAX_PARTICIPANTS}명까지 예약할 수 있습니다.</p>
+                {hasNonConsecutiveSelectedSlots ? (
+                  <p className="text-xs font-semibold leading-5 text-red-700">
+                    <span className="block">선택한 시간대가 연속되지 않습니다.</span>
+                    <span className="block">예약 시간을 다시 확인해주세요.</span>
+                  </p>
+                ) : null}
+                {exceedsAvailableCapacity ? (
+                  <p className="text-xs font-semibold text-red-600">
+                    선택한 시간대 중 잔여 인원이 부족한 시간대가 있습니다.
                   </p>
                 ) : null}
                 {!isParticipantCountWellFormed || (isParticipantCountWellFormed && !isParticipantCountInRange) ? (
@@ -391,34 +441,13 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
                     예약 인원은 {MIN_PARTICIPANTS}명 이상 {MAX_PARTICIPANTS}명 이하의 숫자로 입력해 주세요.
                   </p>
                 ) : null}
-              </div>
-              <div className="rounded-2xl bg-[#f8f4ff] p-4 text-sm text-slate-700">
-                <div>예약일: {selectedDate}</div>
-                <div className={`mt-2 font-semibold ${exceedsMaxTimeSlots ? "text-red-600" : "text-[#4B3B71]"}`}>
-                  선택한 시간대 {mergedTimeRanges.length}개
-                </div>
                 {exceedsMaxTimeSlots ? (
-                  <div className="mt-1 text-xs font-semibold text-red-600">
+                  <p className="text-xs font-semibold text-red-600">
                     {myUsedSlotCount > 0
                       ? `이 날짜에 이미 ${myUsedSlotCount}시간을 예약하셔서 추가로 ${remainingDailyBudget}시간(개)까지만 예약할 수 있습니다.`
                       : `최대 ${MAX_TIME_SLOTS_PER_RESERVATION}시간(개)까지만 예약할 수 있습니다.`}{" "}
                     시간대를 {selectedSlotList.length - remainingDailyBudget}개 이상 해제해 주세요.
-                  </div>
-                ) : null}
-                {mergedTimeRanges.length > 0 ? (
-                  <ul className="mt-1 space-y-1">
-                    {mergedTimeRanges.map((range) => (
-                      <li key={`${range.start}-${range.end}`}>· {formatTimeRange(range)}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="mt-1 text-slate-500">선택된 시간대가 없습니다.</div>
-                )}
-                {selectedSlotList.length > 0 && isParticipantCountInRange ? (
-                  <>
-                    <div className="mt-2 font-semibold text-[#4B3B71]">예약 인원 {participantCount}명</div>
-                    <div className="mt-1 text-slate-600">선택한 각 시간대에 {participantCount}명으로 예약됩니다.</div>
-                  </>
+                  </p>
                 ) : null}
               </div>
               {!state.success && state.message ? (

@@ -136,8 +136,8 @@ export function MyReservationsList({ initialReservations }: { initialReservation
           ).length;
 
           return (
-            <section key={date} className={`space-y-3 ${groupIndex > 0 ? "pt-5" : ""}`}>
-              <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
+            <section key={date} className={`space-y-2 ${groupIndex > 0 ? "pt-5" : ""}`}>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
                 <h3 className="text-lg font-bold text-[#4B3B71] sm:text-xl">{formatDateHeading(date)}</h3>
                 <Button
                   type="button"
@@ -157,16 +157,16 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                 return (
                   <div
                     key={reservation.reservation_number}
-                    className="rounded-xl border border-[#4B3B71]/15 bg-white p-4 sm:p-5"
+                    className="rounded-xl border border-[#4B3B71]/15 bg-white p-3 sm:p-4"
                   >
-                    <p className="text-lg font-bold text-[#4B3B71]">{formatSlotTime(reservation.start_time)}</p>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                    <p className="text-base font-bold text-[#4B3B71] sm:text-lg">{formatSlotTime(reservation.start_time)}</p>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm text-slate-600">
                         <span className="text-xs font-medium text-slate-500">예약 인원</span>
                         <span className="ml-2 font-medium text-slate-700">{reservation.participant_count}명</span>
                       </p>
                       {hasStarted ? (
-                        <span className="justify-self-end rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
                           취소 불가 · 이미 이용 시간이 시작되었습니다
                         </span>
                       ) : (
@@ -174,7 +174,7 @@ export function MyReservationsList({ initialReservations }: { initialReservation
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="justify-self-end rounded-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          className="rounded-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
                           onClick={() => setCancelTarget(reservation)}
                         >
                           예약 취소
