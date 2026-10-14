@@ -211,8 +211,7 @@ export function StudentLoginForm() {
           </Button>
 
           <div className="student-login-help space-y-1 pt-1 text-xs text-[#64748B]">
-            <p>가천대학교 이메일로 6자리 인증번호가 전송됩니다.</p>
-            <p>메일에서 인증번호를 확인한 뒤 아래 입력란에 입력해주세요.</p>
+            <p>인증번호 받기를 누르면 가천대학교 이메일로 6자리 인증번호가 전송됩니다. 메일에서 인증번호를 확인한 뒤 아래 입력란에 입력해주세요.</p>
           </div>
         </form>
       ) : (
