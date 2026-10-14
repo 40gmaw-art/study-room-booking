@@ -27,12 +27,12 @@ export default async function StudentLoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <main className="student-login-page min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-2xl text-[#35284F]">학생 로그인</CardTitle>
-            <CardDescription className="text-[#64748B]">가천대학교 이메일로 인증번호를 받아 로그인합니다.</CardDescription>
+            <CardTitle className="student-login-title text-2xl text-[#35284F]">학생 로그인</CardTitle>
+            <CardDescription className="student-login-help text-[#64748B]">가천대학교 이메일로 인증번호를 받아 로그인합니다.</CardDescription>
           </CardHeader>
           <CardContent>
             <StudentLoginForm />

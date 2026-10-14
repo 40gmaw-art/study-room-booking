@@ -127,36 +127,36 @@ export function StudentLoginForm() {
   }
 
   return (
-    <div className="space-y-4" style={{ colorScheme: "light" }}>
+    <div className="student-login-form space-y-4" style={{ colorScheme: "light" }}>
       {step === "details" ? (
         <form action={requestAction} className="space-y-4">
           <input type="hidden" name="intent" value="send" />
           <div className="grid gap-2">
-            <Label htmlFor="name" className="text-[#4B3B69]">이름</Label>
+            <Label htmlFor="name" className="student-login-label text-[#4B3B69]">이름</Label>
             <Input
               id="name"
               name="name"
               placeholder="김공명"
               required
-              className="bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
+              className="student-login-input bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="department" className="text-[#4B3B69]">학과</Label>
+            <Label htmlFor="department" className="student-login-label text-[#4B3B69]">학과</Label>
             <Input
               id="department"
               name="department"
               placeholder="경영학과"
               required
-              className="bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
+              className="student-login-input bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
               value={form.department}
               onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="studentNumber" className="text-[#4B3B69]">학번</Label>
+            <Label htmlFor="studentNumber" className="student-login-label text-[#4B3B69]">학번</Label>
             <Input
               id="studentNumber"
               name="studentNumber"
@@ -164,14 +164,14 @@ export function StudentLoginForm() {
               required
               inputMode="numeric"
               maxLength={STUDENT_NUMBER_LENGTH}
-              className="bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
+              className="student-login-input bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
               value={form.studentNumber}
               onChange={(event) => setForm((prev) => ({ ...prev, studentNumber: event.target.value }))}
             />
-            {studentNumberError ? <p className="text-xs font-semibold text-[#DC2626]">{studentNumberError}</p> : null}
+            {studentNumberError ? <p className="student-login-error text-xs font-semibold text-[#DC2626]">{studentNumberError}</p> : null}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="phoneNumber" className="text-[#4B3B69]">전화번호</Label>
+            <Label htmlFor="phoneNumber" className="student-login-label text-[#4B3B69]">전화번호</Label>
             <Input
               id="phoneNumber"
               name="phoneNumber"
@@ -181,7 +181,7 @@ export function StudentLoginForm() {
               placeholder="010-0000-0000"
               maxLength={13}
               required
-              className="bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
+              className="student-login-input bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
               value={form.phoneNumber}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, phoneNumber: formatPhoneNumber(event.target.value) }))
@@ -189,28 +189,28 @@ export function StudentLoginForm() {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="email" className="text-[#4B3B69]">가천대학교 이메일</Label>
+            <Label htmlFor="email" className="student-login-label text-[#4B3B69]">가천대학교 이메일</Label>
             <Input
               id="email"
               name="email"
               type="email"
               placeholder="student@gachon.ac.kr"
               required
-              className="bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
+              className="student-login-input bg-white text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100"
               value={form.email}
               onChange={handleEmailChange}
             />
           </div>
 
           {!requestState.success && requestState.message ? (
-            <p role="alert" className="text-sm text-[#DC2626]">{requestState.message}</p>
+            <p role="alert" className="student-login-error text-sm text-[#DC2626]">{requestState.message}</p>
           ) : null}
 
-          <Button className="h-12 w-full rounded-full bg-[#4B3B71] hover:bg-[#3f315d]" type="submit" disabled={isRequesting}>
+          <Button className="student-login-button h-12 w-full rounded-full bg-[#4B3B71] hover:bg-[#3f315d]" type="submit" disabled={isRequesting}>
             {isRequesting ? "전송 중..." : "인증번호 받기"}
           </Button>
 
-          <div className="space-y-1 pt-1 text-xs text-[#64748B]">
+          <div className="student-login-help space-y-1 pt-1 text-xs text-[#64748B]">
             <p>가천대학교 이메일로 6자리 인증번호가 전송됩니다.</p>
             <p>메일에서 인증번호를 확인한 뒤 아래 입력란에 입력해주세요.</p>
           </div>
@@ -218,19 +218,19 @@ export function StudentLoginForm() {
       ) : (
         <div className="space-y-4">
           {requestState.success ? (
-            <p role="status" className="rounded-2xl bg-[#f8f4ff] p-3 text-sm text-slate-700">
+            <p role="status" className="student-login-status rounded-2xl bg-[#f8f4ff] p-3 text-sm text-slate-700">
               <strong className="text-[#4B3B71]">{requestState.email}</strong>로 인증번호 발송 요청을 접수했습니다.
             </p>
           ) : (
-            <p role="alert" className="text-sm text-[#DC2626]">{requestState.message}</p>
+            <p role="alert" className="student-login-error text-sm text-[#DC2626]">{requestState.message}</p>
           )}
-          <p className="text-xs text-[#64748B]">메일이 보이지 않는 경우 스팸메일함도 확인해 주세요.</p>
+          <p className="student-login-help text-xs text-[#64748B]">메일이 보이지 않는 경우 스팸메일함도 확인해 주세요.</p>
 
           <form action={verifyAction} className="space-y-4">
             <input type="hidden" name="email" value={requestState.email} />
             <input type="hidden" name="token" value={otp} />
             <div className="grid gap-2">
-              <Label htmlFor="otp-0" className="text-[#4B3B69]">인증번호</Label>
+              <Label htmlFor="otp-0" className="student-login-label text-[#4B3B69]">인증번호</Label>
               <div className="flex gap-1 sm:gap-2">
                 {otpDigits.map((digit, index) => (
                   <Input
@@ -249,18 +249,18 @@ export function StudentLoginForm() {
                     onKeyDown={(event) => handleOtpKeyDown(index, event)}
                     onPaste={handleOtpPaste}
                     onFocus={(event) => event.target.select()}
-                    className="h-11 min-w-0 flex-1 rounded-xl bg-white px-0 text-center text-base font-semibold text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100 sm:h-12 sm:text-lg"
+                    className="student-login-input h-11 min-w-0 flex-1 rounded-xl bg-white px-0 text-center text-base font-semibold text-[#26212E] placeholder:text-[#958DA3] disabled:opacity-100 sm:h-12 sm:text-lg"
                   />
                 ))}
               </div>
             </div>
 
             {!verifyState.success && verifyState.message ? (
-              <p role="alert" className="text-sm text-[#DC2626]">{verifyState.message}</p>
+              <p role="alert" className="student-login-error text-sm text-[#DC2626]">{verifyState.message}</p>
             ) : null}
 
             <Button
-              className="h-12 w-full rounded-full bg-[#4B3B71] hover:bg-[#3f315d]"
+              className="student-login-button h-12 w-full rounded-full bg-[#4B3B71] hover:bg-[#3f315d]"
               type="submit"
               disabled={isVerifying || otp.length !== OTP_LENGTH}
             >
@@ -279,7 +279,7 @@ export function StudentLoginForm() {
               <Button
                 type="submit"
                 variant="outline"
-                className="h-11 w-full rounded-full"
+                className="student-login-secondary-button h-11 w-full rounded-full"
                 disabled={isRequesting}
               >
                 인증번호 다시 받기
@@ -288,7 +288,7 @@ export function StudentLoginForm() {
             <Button
               type="button"
               variant="ghost"
-              className="h-11 w-full rounded-full sm:w-auto"
+              className="student-login-secondary-button h-11 w-full rounded-full sm:w-auto"
               onClick={() => setStep("details")}
             >
               이메일 수정

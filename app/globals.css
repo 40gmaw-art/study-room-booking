@@ -79,3 +79,79 @@
     @apply bg-[radial-gradient(circle_at_top,_rgba(75,59,113,0.12),_transparent_55%)] bg-background text-foreground;
   }
 }
+
+@media (max-width: 767px) {
+  .student-login-page {
+    color-scheme: light;
+    color: #26212e;
+  }
+
+  .student-login-page .student-login-title {
+    color: #35284f;
+  }
+
+  .student-login-page .student-login-label {
+    color: #4b3b69;
+  }
+
+  .student-login-page .student-login-help {
+    color: #64748b;
+  }
+
+  .student-login-page .student-login-error {
+    color: #dc2626;
+  }
+
+  .student-login-page .student-login-status {
+    color: #334155;
+  }
+
+  .student-login-page input.student-login-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: #fff;
+    color: #26212e;
+    -webkit-text-fill-color: #26212e;
+    opacity: 1;
+  }
+
+  .student-login-page input.student-login-input::placeholder {
+    color: #958da3;
+    -webkit-text-fill-color: #958da3;
+    opacity: 1;
+  }
+
+  .student-login-page input.student-login-input:disabled {
+    color: #26212e;
+    -webkit-text-fill-color: #26212e;
+    opacity: 1;
+  }
+
+  .student-login-page input.student-login-input:-webkit-autofill,
+  .student-login-page input.student-login-input:-webkit-autofill:hover,
+  .student-login-page input.student-login-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #26212e;
+    box-shadow: 0 0 0 1000px #fff inset;
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  .student-login-page .student-login-button {
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+  }
+
+  .student-login-page .student-login-button:disabled {
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    opacity: 1;
+  }
+
+  .student-login-page .student-login-secondary-button {
+    color: #4b3b69;
+  }
+
+  .student-login-page .student-login-secondary-button:disabled {
+    color: #4b3b69;
+    opacity: 1;
+  }
+}
