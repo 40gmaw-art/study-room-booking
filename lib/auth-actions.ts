@@ -50,6 +50,32 @@ const adminLoginSchema = z.object({
   password: z.string().min(1, "비밀번호를 입력해 주세요."),
 });
 
+function logStudentOtpFailure(error: unknown) {
+  const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const message = error instanceof Error
+    ? error.message
+    : typeof details.message === "string"
+      ? details.message
+      : "Unknown authentication error";
+  const safeMessage = message
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[redacted-email]")
+    .replace(/\b\d{6,}\b|\b\d{2,3}[- ]?\d{3,4}[- ]?\d{4}\b/g, "[redacted-number]")
+    .replace(/https?:\/\/\S+/gi, "[redacted-url]")
+    .replace(/\b(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/gi, "[redacted-credential]")
+    .replace(/\b[A-Za-z0-9_-]{40,}\b/g, "[redacted-credential]");
+
+  console.error("[student-otp] Supabase Auth request failed", {
+    name: error instanceof Error
+      ? error.name
+      : typeof details.name === "string"
+        ? details.name
+        : "UnknownError",
+    status: typeof details.status === "number" ? details.status : undefined,
+    code: typeof details.code === "string" ? details.code : undefined,
+    message: safeMessage,
+  });
+}
+
 async function getProfileForCurrentUser() {
   const supabase = await createClient();
   const {
@@ -92,7 +118,24 @@ export async function requestStudentOtp(prevState: unknown, formData: FormData) 
 
   const payload = parsed.data;
   const isResend = formData.get("intent") === "resend";
-  const supabase = await createClient();
+  const missingSupabaseEnv = [
+    ["NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL],
+    ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY],
+  ]
+    .filter(([, value]) => !value?.trim())
+    .map(([name]) => name);
+
+  if (missingSupabaseEnv.length > 0) {
+    console.error("[student-otp] Supabase configuration missing", {
+      missing: missingSupabaseEnv,
+    });
+    return {
+      success: false as const,
+      message: "인증 서비스 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.",
+      email: payload.email,
+    };
+  }
+
   const cookieStore = await cookies();
 
   // A student login attempt must never carry over a leftover admin-mode
@@ -116,15 +159,29 @@ export async function requestStudentOtp(prevState: unknown, formData: FormData) 
     },
   );
 
-  const { error } = await supabase.auth.signInWithOtp({
-    email: payload.email,
-    options: {
-      shouldCreateUser: true,
-    },
-  });
+  let error: { status?: number; code?: string; message?: string } | null;
+  try {
+    const supabase = await createClient();
+    const result = await supabase.auth.signInWithOtp({
+      email: payload.email,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+    error = result.error;
+  } catch (requestError) {
+    logStudentOtpFailure(requestError);
+    return {
+      success: false as const,
+      message: "인증 서비스에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      email: payload.email,
+    };
+  }
 
   if (error) {
-    const rateLimited = error.status === 429 || /rate limit/i.test(error.message ?? "");
+    logStudentOtpFailure(error);
+    const rateLimited =
+      error.status === 429 || /rate.?limit|over_email_send/i.test(`${error.code ?? ""} ${error.message ?? ""}`);
     return {
       success: false as const,
       message: rateLimited
@@ -134,11 +191,13 @@ export async function requestStudentOtp(prevState: unknown, formData: FormData) 
     };
   }
 
+  console.info("[student-otp] Supabase Auth accepted OTP request", { resend: isResend });
+
   return {
     success: true as const,
     message: isResend
-      ? "인증번호를 다시 전송했습니다."
-      : "인증번호를 전송했습니다. 가천대학교 이메일을 확인해주세요.",
+      ? "인증번호 재전송 요청을 접수했습니다. 가천대학교 이메일을 확인해 주세요."
+      : "인증번호 발송 요청을 접수했습니다. 가천대학교 이메일을 확인해 주세요.",
     email: payload.email,
   };
 }
