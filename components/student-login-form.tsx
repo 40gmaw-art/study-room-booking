@@ -127,7 +127,7 @@ export function StudentLoginForm() {
   }
 
   return (
-    <div className="student-login-form space-y-4" style={{ colorScheme: "light" }}>
+    <div className="student-login-form space-y-4">
       {step === "details" ? (
         <form action={requestAction} className="space-y-4">
           <input type="hidden" name="intent" value="send" />
