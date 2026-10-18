@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogoutButton } from "@/components/logout-button";
+import { StudentHeaderActions } from "@/components/student-header-actions";
 import { DateCalendar } from "@/components/date-calendar";
 import { formatTimeRange, getBookingDateOptions, getDefaultBookingDate, isPastTimeSlot, mergeConsecutiveTimeSlots, MAX_PARTICIPANTS, MAX_TIME_SLOTS_PER_RESERVATION, MIN_PARTICIPANTS, TIME_SLOTS } from "@/lib/booking";
 import { createReservationsBulkAction, getBookingAvailability, getMyActiveReservedSlots } from "@/lib/booking-actions";
@@ -210,20 +209,12 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   return (
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
-        <header className="flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
+        <header className="student-page-header flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
           <div>
             <p className="text-sm font-semibold text-[#4B3B71]">예약하기</p>
             <p className="text-base font-bold">{profile?.name ?? "학생"}님</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href="/my-reservations">내 예약</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href="/" prefetch={false}>홈</Link>
-            </Button>
-            <LogoutButton className="rounded-full" />
-          </div>
+          <StudentHeaderActions page="booking" />
         </header>
 
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">

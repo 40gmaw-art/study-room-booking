@@ -1,7 +1,5 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogoutButton } from "@/components/logout-button";
+import { StudentHeaderActions } from "@/components/student-header-actions";
 import { MyReservationsList } from "@/components/my-reservations-list";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -172,17 +170,12 @@ export default async function MyReservationsPage() {
   return (
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
-        <header className="flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
+        <header className="student-page-header flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
           <div>
             <p className="text-sm font-semibold text-[#4B3B71]">내 예약</p>
             <p className="text-base font-bold">예약 내역을 확인하세요</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href="/booking">예약하기</Link>
-            </Button>
-            <LogoutButton className="rounded-full" />
-          </div>
+          <StudentHeaderActions page="my-reservations" />
         </header>
 
         <Card className="border-[#4B3B71]/10 bg-white shadow-sm">
