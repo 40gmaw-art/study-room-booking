@@ -16,9 +16,6 @@ import { useActionState } from "react";
 type SlotAvailability = { value: string; label: string; count: number; full: boolean };
 
 const AVAILABILITY_REFRESH_MS = 20000;
-const STUDENT_BOOKING_TIME_SLOTS = TIME_SLOTS.map((slot) =>
-  slot.value === "16:00:00" ? { ...slot, label: "16:00~16:50", end: "16:50" } : slot,
-);
 
 export function BookingPage({ profile }: { profile: { name: string; department: string; student_number: string; phone_number: string | null; email: string; role: string } | null }) {
   const searchParams = useSearchParams();
@@ -147,7 +144,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
   const selectedDateAvailability = availableDates.find((option) => option.date === selectedDate);
   const isSelectedDateEnabled = selectedDateAvailability?.enabled ?? false;
 
-  const selectedSlotList = STUDENT_BOOKING_TIME_SLOTS.filter((slot) => selectedSlots.has(slot.value));
+  const selectedSlotList = TIME_SLOTS.filter((slot) => selectedSlots.has(slot.value));
   const bookingSlotIndices = Array.from(new Set([...myReservedSlots, ...selectedSlots]))
     .map((value) => TIME_SLOTS.findIndex((timeSlot) => timeSlot.value === value))
     .filter((slotIndex) => slotIndex >= 0)
@@ -210,7 +207,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <header className="student-page-header flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
-          <div>
+          <div className="student-page-header-copy">
             <p className="text-sm font-semibold text-[#4B3B71]">예약하기</p>
             <p className="text-base font-bold">{profile?.name ?? "학생"}님</p>
           </div>
@@ -244,7 +241,7 @@ export function BookingPage({ profile }: { profile: { name: string; department: 
               </div>
             ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {STUDENT_BOOKING_TIME_SLOTS.map((slot) => {
+              {TIME_SLOTS.map((slot) => {
                 const detail = slots.find((item) => item.value === slot.value);
                 const isPast = isPastTimeSlot(selectedDate, slot.value);
                 const alreadyReservedByMe = myReservedSlots.has(slot.value);

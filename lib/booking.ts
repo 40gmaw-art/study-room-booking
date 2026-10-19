@@ -5,7 +5,7 @@ export const TIME_SLOTS = [
   { value: "13:00:00", label: "13:00~13:50", start: "13:00", end: "13:50" },
   { value: "14:00:00", label: "14:00~14:50", start: "14:00", end: "14:50" },
   { value: "15:00:00", label: "15:00~15:50", start: "15:00", end: "15:50" },
-  { value: "16:00:00", label: "16:00~17:00", start: "16:00", end: "17:00" },
+  { value: "16:00:00", label: "16:00~16:50", start: "16:00", end: "16:50" },
 ] as const;
 
 export type TimeSlot = (typeof TIME_SLOTS)[number];

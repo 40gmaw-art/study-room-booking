@@ -171,7 +171,7 @@ export default async function MyReservationsPage() {
     <main className="min-h-screen bg-[#f8f4ff] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <header className="student-page-header flex items-center justify-between rounded-full border border-[#4B3B71]/10 bg-white/90 px-4 py-3 shadow-sm">
-          <div>
+          <div className="student-page-header-copy">
             <p className="text-sm font-semibold text-[#4B3B71]">내 예약</p>
             <p className="text-base font-bold">예약 내역을 확인하세요</p>
           </div>

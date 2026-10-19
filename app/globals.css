@@ -63,6 +63,8 @@
 
 .student-header-actions {
   display: flex;
+  flex-direction: row;
+  align-items: center;
   flex: 0 0 auto;
   flex-wrap: nowrap;
   justify-content: flex-end;
@@ -93,20 +95,27 @@
 }
 
 .student-page-header {
-  padding-bottom: 8px;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
 }
 
-.student-page-header > .student-header-actions {
-  align-self: flex-start;
+.student-page-header-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 480px) {
   .student-page-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 8px;
     border-radius: 1rem;
-    padding: 12px 12px 8px;
+    padding: 8px 12px;
   }
 
   .student-header-actions {
@@ -118,7 +127,9 @@
   .student-header-actions > form {
     flex-basis: min(80px, calc((100vw - 74px) / 3));
   }
+}
 
+@media (max-width: 639px) {
   .admin-reservations-header {
     flex-direction: column;
     align-items: stretch;
